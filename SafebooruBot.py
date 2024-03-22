@@ -11,8 +11,13 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.common.exceptions import NoSuchElementException, JavascriptException
 from selenium.webdriver.support import expected_conditions as EC
 import discord
-from bot_token import character_update_bot
+from bot_token import safebooru_bot
 from discord.ext import commands
+from discord.utils import find
+
+
+import mysql.connector
+from important import ep, user, ps
 
 intents = discord.Intents.default()
 intents.members = True
@@ -20,18 +25,72 @@ intents.messages = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='!!', intents=intents)
-cred = credentials.Certificate('CharacterBot\\serviceAccountKey.json')
-firebase_admin.initialize_app(cred)
-db = firestore_async.client()
+
+#safebooru_dbs = mysql.connector.connect(
+#    host=ep,
+#    user=user,
+#    password=ps
+#)
+
+
+@bot.event
+async def on_guild_join(guild):
+    cnx = mysql.connector.connect(
+    host=ep,
+    user=user,
+    password=ps
+    )
+
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"DROP DATABASE IF EXISTS server_{guild.id}")
+        cursor.execute(f"CREATE DATABASE server_{guild.id}")
+        
+        cursor.execute(f"USE server_{guild.id};")
+        cursor.execute("DROP TABLE IF EXISTS settings;")
+        cursor.execute("Create TABLE settings(In_process TINYINT(1));")
+        
+        cursor.close()
+    cnx.close()
+
+
+
 
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
    
 
-@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
-async def setArtThread(ctx, link):
-    await db.collection('character_threads').add({'thread_id': ctx.channel.id, 'link': link, 'image': 'jpg'})
+@bot.command(help='Sets the current channel as a location for images to be sent to')
+async def setArtThread(ctx):
+    cnx = mysql.connector.connect(
+    host=ep,
+    user=user,
+    password=ps
+    )
+    channel_id = "channel_" + str(ctx.channel.id)
+
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute('SHOW TABLES')
+        table_names = [table[0] for table in cursor.fetchall()]
+
+        if channel_id in table_names:
+            await ctx.send("Silly. This channel is already a designated place for art")
+        else:
+            cursor.execute(f"Create TABLE {channel_id}(Tag VARCHAR(96), Link VARCHAR(192));")
+            await ctx.send("This channel has been set as a location for art")
+        cursor.close()
+    cnx.close()
+
+    #await ctx.send("Let me know if there is anything else I can do for you")
+
+
+
+#@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
+#async def setArtThread(ctx, link):
+#    await db.collection('character_threads').add({'thread_id': ctx.channel.id, 'link': link, 'image': 'jpg'})
 
 @bot.command(help='Starts displaying the latest new images from the given links')
 async def startArtShow(ctx):
@@ -80,4 +139,4 @@ async def stopArtShow(ctx):
     keep_going = False
     await ctx.send("Ending search")
 
-bot.run(character_update_bot)
+bot.run(safebooru_bot)

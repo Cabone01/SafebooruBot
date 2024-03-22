@@ -2,3 +2,5 @@
 serviceAccountKey.json
 __pycache__/important.cpython-310.pyc
 important.py
+bot_token.py
+__pycache__/bot_token.cpython-310.pyc
