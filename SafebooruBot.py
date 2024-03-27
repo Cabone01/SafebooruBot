@@ -48,8 +48,9 @@ async def on_guild_join(guild):
         
         cursor.execute(f"USE server_{guild.id};")
         cursor.execute("DROP TABLE IF EXISTS settings;")
-        cursor.execute("Create TABLE settings(In_process TINYINT(1));")
-        
+        cursor.execute("Create TABLE settings(ID INT NOT NULL AUTO_INCREMENT, In_process TINYINT(1));")
+        cursor.execute("DROP TABLE IF EXISTS channels;")
+        cursor.execute("Create TABLE channels(ID INT NOT NULL AUTO_INCREMENT, Channel ID VARCHAR(32), Name VARCHAR(48), Amount_of_tags_selected INT);")
         cursor.close()
     cnx.close()
 
@@ -79,14 +80,33 @@ async def setArtThread(ctx):
         if channel_id in table_names:
             await ctx.send("Silly. This channel is already a designated place for art")
         else:
-            cursor.execute(f"Create TABLE {channel_id}(Tag VARCHAR(96), Link VARCHAR(192));")
+            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL AUTO_INCREMENT, Tag VARCHAR(96), category VARCHAR(96), Link VARCHAR(192));")
+            sql = "INSERT INTO channels VALUES (%s, %s, %s)"
+            row = (ctx.channel.id, ctx.channel.name, 0)
+            cursor.execute(sql, row)
+            cnx.commit()
+            
             await ctx.send("This channel has been set as a location for art")
         cursor.close()
     cnx.close()
 
-    #await ctx.send("Let me know if there is anything else I can do for you")
+    #await ctx.send("Let me know if there is asnything else I can do for you")
 
+@bot.command()
+async def setLimit(ctx):
+    await ctx.send("")
 
+@bot.command()
+async def search(ctx):
+    await ctx.send("")
+
+@bot.command()
+async def select(ctx):
+    await ctx.send("")
+
+@bot.command()
+async def howToSearchAndSelect(ctx):
+    await ctx.send("")
 
 #@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
 #async def setArtThread(ctx, link):
