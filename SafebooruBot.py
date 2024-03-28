@@ -14,7 +14,7 @@ import discord
 from bot_token import safebooru_bot
 from discord.ext import commands
 from discord.utils import find
-
+from discord.ext import tasks
 
 import mysql.connector
 from important import ep, user, ps
@@ -48,9 +48,10 @@ async def on_guild_join(guild):
         
         cursor.execute(f"USE server_{guild.id};")
         cursor.execute("DROP TABLE IF EXISTS settings;")
-        cursor.execute("Create TABLE settings(ID INT NOT NULL AUTO_INCREMENT, In_process TINYINT(1));")
+        cursor.execute("Create TABLE settings(ID INT NOT NULL AUTO_INCREMENT, Limit INT,  In_process TINYINT(1));")
+        # Perhaps a row added in once the setting is finalized
         cursor.execute("DROP TABLE IF EXISTS channels;")
-        cursor.execute("Create TABLE channels(ID INT NOT NULL AUTO_INCREMENT, Channel ID VARCHAR(32), Name VARCHAR(48), Amount_of_tags_selected INT);")
+        cursor.execute("Create TABLE channels(Row_ID INT NOT NULL AUTO_INCREMENT, Channel_ID VARCHAR(32), Name VARCHAR(48), Amount_of_tags_selected INT);")
         cursor.close()
     cnx.close()
 
@@ -80,7 +81,7 @@ async def setArtThread(ctx):
         if channel_id in table_names:
             await ctx.send("Silly. This channel is already a designated place for art")
         else:
-            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL AUTO_INCREMENT, Tag VARCHAR(96), category VARCHAR(96), Link VARCHAR(192));")
+            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL AUTO_INCREMENT, Tag VARCHAR(96), Category VARCHAR(96), Link VARCHAR(192), Latest_art VARCHAR(192));")
             sql = "INSERT INTO channels VALUES (%s, %s, %s)"
             row = (ctx.channel.id, ctx.channel.name, 0)
             cursor.execute(sql, row)
@@ -94,7 +95,37 @@ async def setArtThread(ctx):
 
 @bot.command()
 async def setLimit(ctx):
-    await ctx.send("")
+    #cnx = mysql.connector.connect(
+    #host=ep,
+    #user=user,
+    #password=ps
+    #)
+    
+    number = ctx.message.content[10:].strip()
+
+    if number.isnumeric():
+        number = int(number)
+        
+        if number <= 25:
+            #if cnx.is_connected():
+            #    cursor = cnx.cursor()
+            #    cursor.execute(f"USE server_{ctx.guild.id};")
+            #    sql = f"UPDATE settings SET Limit = {number} WHERE ID = 1"
+            #    cursor.execute(sql)
+            #    cnx.commit()
+
+            #    cursor.close()
+            await ctx.send(f"The limit for the search command is now set to {number}")
+        else:
+            await ctx.send(f"{number} is too high of a value. Please keep it at 25 or below")
+
+        #cnx.close()
+    else:
+        await ctx.send(f"There are letters and/or symbols following your command. Can you use only numeric values please?")                       
+
+    
+    #cnx.close()
+    #await ctx.send(f"{len(ctx.message.content[10:].strip())}")
 
 @bot.command()
 async def search(ctx):
@@ -116,6 +147,8 @@ async def howToSearchAndSelect(ctx):
 async def startArtShow(ctx):
     global keep_going 
     keep_going = True
+
+    asyncio.create_task(artShow(ctx))
 
     while keep_going:
         documts = db.collection('character_threads')
@@ -153,10 +186,31 @@ async def startArtShow(ctx):
         driver.close()
         await asyncio.sleep(1)
 
-@bot.command(help='Ends the bot from searching for new images to post')
+@bot.command(help='Stops the bot from searching for new images to post')
 async def stopArtShow(ctx):
-    global keep_going 
-    keep_going = False
-    await ctx.send("Ending search")
+    cnx = mysql.connector.connect(
+    host=ep,
+    user=user,
+    password=ps
+    )
+    
+    #global keep_going 
+    #keep_going = False
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"UPDATE settings SET In_process = 0 WHERE ID = 1"
+        cursor.execute(sql)
+        cnx.commit()
+
+        cursor.close()
+    cnx.close()
+
+    await ctx.send("Ending the show")
+
+
+#@tasks.loop(seconds = 5)
+async def artShow(ctx):
+    None
 
 bot.run(safebooru_bot)
