@@ -1,4 +1,5 @@
 import os
+import math
 import asyncio
 import urllib.request
 import firebase_admin
@@ -84,8 +85,9 @@ async def setArtThread(ctx):
         if channel_id in table_names:
             await ctx.send("Silly. This channel is already a designated place for art")
         else:
-            cursor.execute(f"Create TABLE {channel_id}(Id INT NOT NULL AUTO_INCREMENT, Tag VARCHAR(96), Category VARCHAR(96), Link VARCHAR(192), Latest_art VARCHAR(192), PRIMARY KEY(Id));")
-            sql = "INSERT INTO channels VALUES (%s, %s, %s)"
+            #cursor.execute(f"DROP TABLE IF EXISTS {channel_id};")
+            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL, Name VARCHAR(256), Category VARCHAR(256), Type VARCHAR(16), Link VARCHAR(2400), Latest_art VARCHAR(2400), PRIMARY KEY(ID));")
+            sql = "INSERT INTO channels (Channel_ID, Name, Amount_of_tags_selected) VALUES (%s, %s, %s)"
             row = (ctx.channel.id, ctx.channel.name, 0)
             cursor.execute(sql, row)
             cnx.commit()
@@ -118,17 +120,16 @@ async def setLimit(ctx):
                 cnx.commit()
 
                 cursor.close()
+            cnx.close()
             await ctx.send(f"The limit for the search command is now set to {number}")
         else:
             await ctx.send(f"{number} is too high of a value. Please keep it at 25 or below")
 
-        cnx.close()
     else:
-        await ctx.send(f"There are letters and/or symbols following your command. Can you use only numeric values please?")                       
+        await ctx.send(f"There are letters and/or symbols in your request. Can you use only numeric values please?")                       
 
 @bot.command()
 async def search(ctx):
-
     msg = ctx.message.content[8:].strip().split("|")
     name = []
     cat = []
@@ -154,13 +155,6 @@ async def search(ctx):
     if len(error_text) > 0:
         await ctx.send('\n \n'.join(error_text))
     else:
-        search_name = []
-        slct_name = []
-        search_cat = []
-        slct_cat = []
-        search_type = ""
-        slct_type = ""
-        
         srch = []
         slct = []
 
@@ -174,14 +168,16 @@ async def search(ctx):
                 col_value += 1
         if len(cat) > 0:
             col_value = 1
-            for i in name:
+            for i in cat:
                 srch.append(f"'{i}' LIKE Category_{col_value}")
                 slct.append(f"Category_{col_value}")
                 col_value += 1
         if len(c_type) > 0:
-            srch.append(f"'{c_type[0]}' LIKE Main_Category")
-            slct.append("Main_Category")
+            srch.append(f"'{c_type[0]}' LIKE Type")
+            slct.append("Type")
         
+        # print(srch)
+        # print(slct)
        
         cnx = mysql.connector.connect(
         host=host,
@@ -196,36 +192,161 @@ async def search(ctx):
                 sql = f"SELECT List_limit FROM settings"
                 cursor.execute(sql)
                 limit = cursor.fetchone()[0]
-                print(limit)
-
+                
                 cursor.execute(f"USE safebooru_info;")
-                sql = f"SELECT * FROM safebooru_tags WHERE {' OR '.join(srch)} LIMIT {limit}"
+                sql = f"SELECT * FROM safebooru_tags WHERE {' AND '.join(srch)} LIMIT {limit}"
                 cursor.execute(sql)
                 tags = cursor.fetchall()
-                print(tags)
-                list_tags = []
-                for i in tags:
-                    k = [j for j in i if j != None]
-                    
-                    list_tags.append(' '.join(k))
-
-                fnd_tags = '\n \n'.join(list_tags)
-
                 cursor.close()
+
+                list_tags = ["### __ID | Name | Category | Type | Link__"]
+                #["### **ID** | **Name** | **Category** | **Type** | **Link**"]
+                for i in tags:
+                    name_sum = sum(j != None for j in i[1:25])
+                    cat_sum = sum(j != None for j in i[25:-2])
+                    #type_n_null = sum(j != None for j in i[-2])
+                    k = [j for j in i if j != None]
+                    for l in range(1, len(k)-1):
+                        k[l] = k[l].replace("_", "\\_")
+                    k[-1] = f"[Link](<{k[-1]}>)"
+                    k[0] = str(k[0]) + " |"
+                    
+                    k[name_sum] = k[name_sum] + " |"
+                    if cat_sum > 0:
+                        k[name_sum + cat_sum] = k[name_sum + cat_sum] + " |"
+                    else:
+                        k.insert(name_sum + 1, "  |")
+                    k[-2] = k[-2] + " |"
+
+                    #indices = [ind for ind, item in enumerate(k) if item[-1] == "|"]
+                    #col_1 = k[indices[0]]
+                    #uneven_list = ' '.join(k)
+                    list_tags.append(' '.join(k))
+                #list_tags.insert(0, "ID | Name | Category | Type | Link")
+                id_max = 0
+                name_max = 0
+                category_max = 0
+                type_max = 0
+                for i in list_tags[1:]:
+                    cols = i.split("|")
+                    if len(cols[0]) > id_max:
+                        id_max = len(cols[0])
+                    if len(cols[1]) > name_max:
+                        name_max = len(cols[1])
+                    if len(cols[2]) > category_max:
+                        category_max = len(cols[2])
+                    if len(cols[3]) > type_max:
+                        type_max = len(cols[3])
+                
+                for i in range(0, len(list_tags)):
+                    cols = list_tags[i].split("|")
+                    if len(cols[0]) != id_max:
+                        cols[0] += "\\_" * (id_max - len(cols[0]))
+                    if len(cols[1]) != name_max:
+                        cols[1] = "\\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\\_" * math.floor((name_max - len(cols[1])) / 2)
+                    if len(cols[2]) != category_max:
+                        cols[2] = "\\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\\_" * math.floor((category_max - len(cols[2])) / 2)
+                    if len(cols[3]) != type_max:
+                        cols[3] = "\\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\\_" * math.floor((type_max - len(cols[3])) / 2)
+                    list_tags[i] = '|'.join(cols)
+
+                fnd_tags = '\n'.join(list_tags)
+                #print(fnd_tags)
         cnx.close()
 
-        
-        #await ctx.send(f"{name}, {cat}, {c_type}")
-        #await ctx.send(f"{', '.join(slct)} \n {' OR '.join(srch)}")
-        await ctx.send(fnd_tags)
+        await ctx.send(f"{fnd_tags}")
 
-# SELECT *
-# FROM testing 
-# WHERE 'foo' in (col1, col2, col3, . . . );
 
 @bot.command()
-async def select(ctx):
-    await ctx.send("")
+async def selectTagID(ctx):
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+    msg = ctx.message.content[13:].strip().split()
+    srch_key = 0
+    channel_name = ""
+    art_name = ""
+    #print(msg)
+    if msg[0].isnumeric():
+        if msg[1].isnumeric():
+            srch_row = int(msg[0])
+            srch_key = int(msg[1])
+            if cnx.is_connected():
+                cursor = cnx.cursor()
+                
+                cursor.execute(f"USE safebooru_info;")
+                sql = f"SELECT * FROM safebooru_tags WHERE Tag_Id LIKE {srch_key}"
+                cursor.execute(sql)
+                tag = cursor.fetchone()
+                tag_id = tag[0]
+                tag_name = ' '.join([i for i in tag[1:25] if i != None])
+                tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+                tag_type = tag[-2]
+                tag_link = tag[-1]
+
+                art_name = tag_name
+                clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+                
+
+                cursor.execute(f"USE server_{ctx.guild.id};")
+                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID LIKE {srch_row}"
+                cursor.execute(sql)
+                channel_row = cursor.fetchone()
+                channel = channel_row[0]
+                channel_name = channel_row[1]
+                amt_tags = int(channel_row[2])
+                
+                sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(sql, clean_tag)
+                
+                sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
+                cursor.execute(sql)
+
+                cnx.commit()
+                cursor.close()
+            cnx.close()
+            await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+        else:
+            await ctx.send("Make sure that the ID you listed is a numerical number please")
+    else:
+        await ctx.send("The value you inputed for the channel is not a numerical number. Please use a number from the associated with the channel")
+            # srch_row = int(msg[0])
+            # srch_key = msg[1]
+            # if cnx.is_connected():
+            #     cursor = cnx.cursor()
+                
+            #     cursor.execute(f"USE safebooru_info;")
+            #     sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE {srch_key}"
+            #     cursor.execute(sql)
+            #     tag = cursor.fetchone()
+            #     tag_id = tag[0]
+            #     tag_name = ' '.join([i for i in tag[1:25] if i != None])
+            #     tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+            #     tag_type = tag[-2]
+            #     tag_link = tag[-1]
+
+            #     clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+            #     l = clean_tag
+
+            #     cursor.execute(f"USE server_{ctx.guild.id};")
+            #     sql = f"SELECT Channel_ID, Amount_of_tags_selected FROM channels WHERE Row_ID LIKE {srch_row}"
+            #     cursor.execute(sql)
+            #     channel_row = cursor.fetchone()
+            #     channel = channel_row[0]
+            #     amt_tags = int(channel_row[1])
+                
+            #     sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+            #     cursor.execute(sql, clean_tag)
+                
+            #     sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
+            #     cursor.execute(sql)
+
+            #     cnx.commit()
+    #else:
+    #    if 
 
 @bot.command()
 async def howToSearchAndSelect(ctx):
