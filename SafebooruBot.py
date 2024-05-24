@@ -60,7 +60,9 @@ async def on_guild_join(guild):
     cnx.close()
 
 
-
+@bot.event
+async def on_connect(guild):
+    print(f"Connected to {guild.id}")
 
 @bot.event
 async def on_ready():
@@ -258,7 +260,8 @@ async def search(ctx):
 
 
 @bot.command()
-async def selectTagID(ctx):
+async def select(ctx):
+    # add for when there are duplicates, maybe if database is not up, and nothing shows up in search
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -266,12 +269,12 @@ async def selectTagID(ctx):
     )
 
     msg = ctx.message.content[13:].strip().split()
-    srch_key = 0
+    #srch_key = 0
     channel_name = ""
     art_name = ""
     #print(msg)
-    if msg[0].isnumeric():
-        if msg[1].isnumeric():
+    if msg[1].isnumeric():
+        if msg[0].isnumeric():
             srch_row = int(msg[0])
             srch_key = int(msg[1])
             if cnx.is_connected():
@@ -307,46 +310,59 @@ async def selectTagID(ctx):
 
                 cnx.commit()
                 cursor.close()
-            cnx.close()
+                cnx.close()
             await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
         else:
             await ctx.send("Make sure that the ID you listed is a numerical number please")
     else:
-        await ctx.send("The value you inputed for the channel is not a numerical number. Please use a number from the associated with the channel")
-            # srch_row = int(msg[0])
-            # srch_key = msg[1]
-            # if cnx.is_connected():
-            #     cursor = cnx.cursor()
-                
-            #     cursor.execute(f"USE safebooru_info;")
-            #     sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE {srch_key}"
-            #     cursor.execute(sql)
-            #     tag = cursor.fetchone()
-            #     tag_id = tag[0]
-            #     tag_name = ' '.join([i for i in tag[1:25] if i != None])
-            #     tag_category = ' '.join([i for i in tag[25:-2] if i != None])
-            #     tag_type = tag[-2]
-            #     tag_link = tag[-1]
+        srch_row = int(msg[0])
+        srch_link = msg[1].lower()
+        if "safebooru.org/index.php?page=post" in srch_link:
+            if cnx.is_connected():
+                link = srch_link.split("index.php?page=post", 1)[1].replace("_", "\_").replace("%", "\%")
 
-            #     clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
-            #     l = clean_tag
+                cursor = cnx.cursor()
+                cursor.execute(f"USE safebooru_info;")
+                print(link)
+                sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE '%{link}'"
+                cursor.execute(sql)
+                tag = cursor.fetchone()
+                tag_id = tag[0]
+                tag_name = ' '.join([i for i in tag[1:25] if i != None])
+                tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+                tag_type = tag[-2]
+                tag_link = tag[-1]
 
-            #     cursor.execute(f"USE server_{ctx.guild.id};")
-            #     sql = f"SELECT Channel_ID, Amount_of_tags_selected FROM channels WHERE Row_ID LIKE {srch_row}"
-            #     cursor.execute(sql)
-            #     channel_row = cursor.fetchone()
-            #     channel = channel_row[0]
-            #     amt_tags = int(channel_row[1])
-                
-            #     sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
-            #     cursor.execute(sql, clean_tag)
-                
-            #     sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
-            #     cursor.execute(sql)
+                clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
 
-            #     cnx.commit()
+                print(ctx.guild.id)
+                cursor.execute(f"USE server_{ctx.guild.id};")
+                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID LIKE {srch_row}"
+                cursor.execute(sql)
+                channel_row = cursor.fetchone()
+                channel = channel_row[0]
+                channel_name = channel_row[1]
+                amt_tags = int(channel_row[2])
+                
+                sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(sql, clean_tag)
+                
+                sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
+                cursor.execute(sql)
+
+                cnx.commit()
+                cursor.close()
+                cnx.close()
+            await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+        else:
+            await ctx.send(f"Make sure the link you provided is spelt correctly and from safebooru posts")
+        #else:
     #else:
     #    if 
+
+@bot.command()
+async def selectHere(ctx):
+    await ctx.send("")
 
 @bot.command()
 async def howToSearchAndSelect(ctx):
@@ -426,6 +442,8 @@ async def stopArtShow(ctx):
 
     await ctx.send("Ending the show")
 
+async def ArtShow(ctx):
+    await print("This is where the art grabbing will start")
 
 #@tasks.loop(seconds = 5)
 async def artShow(ctx):
