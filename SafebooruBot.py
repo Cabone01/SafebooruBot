@@ -59,11 +59,6 @@ async def on_guild_join(guild):
     cnx.commit()
     cnx.close()
 
-
-@bot.event
-async def on_connect(guild):
-    print(f"Connected to {guild.id}")
-
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
@@ -98,7 +93,94 @@ async def setArtThread(ctx):
         cursor.close()
     cnx.close()
 
-    #await ctx.send("Let me know if there is asnything else I can do for you")
+@bot.command()
+async def deleteArtThread(ctx):
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+    dlt_channel = ctx.message.content.split()[1]
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"SELECT Name, Amount_of_tags_selected FROM channels" #WHERE Row_ID = {dlt_channel}"
+        cursor.execute(sql)
+        artThreads = cursor.fetchall()
+        row_ids = [i[0] for i in artThreads]
+        dlt_fnd = []
+
+        if dlt_channel in row_ids:
+            dlt_fnd = artThreads[row_ids.index(dlt_channel)]
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+
+            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[0]}**? You will lose **{dlt_fnd[1]}** tags that were added there")
+            response = await ctx.bot.wait_for('message', check=check)
+            if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+                dlt_name = dlt_channel.replace("_", "\_")
+                sql = f"SELECT Channel_ID FROM channels WHERE Name LIKE '{dlt_name}'"
+                cursor.execute(sql)
+                channel_id = cursor.fetchone()[0]
+
+                sql = f"DROP TABLE IF EXISTS channel_{channel_id}"
+                cursor.execute(sql)
+
+                sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
+                cursor.execute(sql)
+                cnx.commit()
+
+                cursor.close()
+                cnx.close()
+                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread")
+            else:
+                cursor.close()
+                cnx.close()
+                await ctx.send(f"Since you did not verify, **{dlt_fnd[0]}** will be kept as an art thread")
+        else:
+            cursor.close()
+            cnx.close()
+            await ctx.send(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+        # await ctx.send(f"test: {dlt_channel}")
+
+@bot.command()
+async def seeArtThreads(ctx):
+    # Maybe keep the code that evens out the text (despite it not being by much or at all)
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+    
+    threads = ["### __Channel Name | Number of tags added__"] #[]
+    #max_name_len = 0
+    if cnx.is_connected():
+        cursor = cnx.cursor()  
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"SELECT Name, Amount_of_tags_selected FROM channels"
+        cursor.execute(sql)
+        threads_tup = cursor.fetchall()
+        cursor.close()
+        cnx.close()
+
+        # max_name_len = max(len(i[0]) for i in threads_tup)
+        # if 4 < max_name_len:
+        #     txt = "### __Name" + ("\_" * (max_name_len - 4)) + "| Number of tags__"
+        #     threads.append(txt)
+        # else:
+        #     threads.append("### __Name | Number of tags__")
+
+        for i in threads_tup:
+            name = i[0]
+            num_tags = str(i[1])
+            # if len(name) != max_name_len:
+            #     name += "\_" * (max_name_len - len(name))
+            #channel = " | ".join([name, num_tags])
+            threads.append(" | ".join([name, num_tags]))
+
+    threads = "\n".join(threads) 
+    await ctx.send(f"{threads}")
 
 @bot.command()
 async def setLimit(ctx):
@@ -136,7 +218,6 @@ async def search(ctx):
     name = []
     cat = []
     c_type = []
-
     error_text = []
 
     if len(msg) > 1:
@@ -209,7 +290,7 @@ async def search(ctx):
                     #type_n_null = sum(j != None for j in i[-2])
                     k = [j for j in i if j != None]
                     for l in range(1, len(k)-1):
-                        k[l] = k[l].replace("_", "\\_")
+                        k[l] = k[l].replace("_", "\_")
                     k[-1] = f"[Link](<{k[-1]}>)"
                     k[0] = str(k[0]) + " |"
                     
@@ -243,13 +324,13 @@ async def search(ctx):
                 for i in range(0, len(list_tags)):
                     cols = list_tags[i].split("|")
                     if len(cols[0]) != id_max:
-                        cols[0] += "\\_" * (id_max - len(cols[0]))
+                        cols[0] += "\_" * (id_max - len(cols[0]))
                     if len(cols[1]) != name_max:
-                        cols[1] = "\\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\\_" * math.floor((name_max - len(cols[1])) / 2)
+                        cols[1] = "\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\_" * math.floor((name_max - len(cols[1])) / 2)
                     if len(cols[2]) != category_max:
-                        cols[2] = "\\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\\_" * math.floor((category_max - len(cols[2])) / 2)
+                        cols[2] = "\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\_" * math.floor((category_max - len(cols[2])) / 2)
                     if len(cols[3]) != type_max:
-                        cols[3] = "\\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\\_" * math.floor((type_max - len(cols[3])) / 2)
+                        cols[3] = "\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\_" * math.floor((type_max - len(cols[3])) / 2)
                     list_tags[i] = '|'.join(cols)
 
                 fnd_tags = '\n'.join(list_tags)
@@ -257,7 +338,6 @@ async def search(ctx):
         cnx.close()
 
         await ctx.send(f"{fnd_tags}")
-
 
 @bot.command()
 async def select(ctx):
@@ -268,7 +348,7 @@ async def select(ctx):
     password=password
     )
 
-    msg = ctx.message.content[13:].strip().split()
+    msg = ctx.message.content[8:].strip().split()
     #srch_key = 0
     channel_name = ""
     art_name = ""
@@ -316,14 +396,12 @@ async def select(ctx):
             await ctx.send("Make sure that the ID you listed is a numerical number please")
     else:
         srch_row = int(msg[0])
-        srch_link = msg[1].lower()
+        srch_link = msg[1].lower().replace("(", "%28").replace(")", "%29")
         if "safebooru.org/index.php?page=post" in srch_link:
             if cnx.is_connected():
                 link = srch_link.split("index.php?page=post", 1)[1].replace("_", "\_").replace("%", "\%")
-
                 cursor = cnx.cursor()
                 cursor.execute(f"USE safebooru_info;")
-                print(link)
                 sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE '%{link}'"
                 cursor.execute(sql)
                 tag = cursor.fetchone()
@@ -333,11 +411,11 @@ async def select(ctx):
                 tag_type = tag[-2]
                 tag_link = tag[-1]
 
+                art_name = tag_name
                 clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
 
-                print(ctx.guild.id)
                 cursor.execute(f"USE server_{ctx.guild.id};")
-                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID LIKE {srch_row}"
+                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID = {srch_row}"
                 cursor.execute(sql)
                 channel_row = cursor.fetchone()
                 channel = channel_row[0]
@@ -362,10 +440,110 @@ async def select(ctx):
 
 @bot.command()
 async def selectHere(ctx):
-    await ctx.send("")
+    # add same things from select
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+    msg = ctx.message.content[12:].strip().split()
+    channel_name = ""
+    art_name = ""
+
+    if msg[0].isnumeric():
+        #if msg[0].isnumeric():
+        #srch_row = int(msg[0])
+        srch_key = int(msg[0])
+        if cnx.is_connected():
+            cursor = cnx.cursor()
+            
+            cursor.execute(f"USE safebooru_info;")
+            sql = f"SELECT * FROM safebooru_tags WHERE Tag_Id LIKE {srch_key}"
+            cursor.execute(sql)
+            tag = cursor.fetchone()
+            tag_id = tag[0]
+            tag_name = ' '.join([i for i in tag[1:25] if i != None])
+            tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+            tag_type = tag[-2]
+            tag_link = tag[-1]
+
+            art_name = tag_name
+            clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+            
+
+            cursor.execute(f"USE server_{ctx.guild.id};")
+            sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Channel_ID LIKE {ctx.channel.id}"
+            cursor.execute(sql)
+            channel_row = cursor.fetchone()
+            channel = channel_row[0]
+            channel_name = channel_row[1]
+            amt_tags = int(channel_row[2])
+            
+            sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+            cursor.execute(sql, clean_tag)
+            
+            sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Channel_ID = {ctx.channel.id}"
+            cursor.execute(sql)
+
+            cnx.commit()
+            cursor.close()
+            cnx.close()
+        await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+    #else:
+    #    await ctx.send("Make sure that the ID you listed is a numerical number please")
+    else:
+        #srch_row = int(msg[0])
+        srch_link = msg[0].lower().replace("(", "%28").replace(")", "%29")
+        if "safebooru.org/index.php?page=post" in srch_link:
+            if cnx.is_connected():
+                link = srch_link.split("index.php?page=post", 1)[1].replace("_", "\_").replace("%", "\%")
+
+                cursor = cnx.cursor()
+                cursor.execute(f"USE safebooru_info;")
+                sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE '%{link}'"
+                cursor.execute(sql)
+                tag = cursor.fetchone()
+                tag_id = tag[0]
+                tag_name = ' '.join([i for i in tag[1:25] if i != None])
+                tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+                tag_type = tag[-2]
+                tag_link = tag[-1]
+
+                art_name = tag_name
+                clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+
+                cursor.execute(f"USE server_{ctx.guild.id};")
+                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Channel_ID = {ctx.channel.id}"
+                cursor.execute(sql)
+                channel_row = cursor.fetchone()
+                channel = channel_row[0]
+                channel_name = channel_row[1]
+                amt_tags = int(channel_row[2])
+                
+                sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+                cursor.execute(sql, clean_tag)
+                
+                sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Channel_ID = {ctx.channel.id}"
+                cursor.execute(sql)
+
+                cnx.commit()
+                cursor.close()
+                cnx.close()
+            await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+        else:
+            await ctx.send(f"Make sure the link you provided is spelt correctly and from safebooru posts")
 
 @bot.command()
 async def howToSearchAndSelect(ctx):
+    await ctx.send("")
+
+@bot.command()
+async def seeTagsInThread(ctx):
+    await ctx.send("")
+
+@bot.command()
+async def deleteTagInThread(ctx):
     await ctx.send("")
 
 #@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
@@ -433,7 +611,7 @@ async def stopArtShow(ctx):
     if cnx.is_connected():
         cursor = cnx.cursor()
         cursor.execute(f"USE server_{ctx.guild.id};")
-        sql = f"UPDATE settings SET In_process = 0 WHERE Id = 1"
+        sql = f"UPDATE settings SET In_process = 0 WHERE ID = 1"
         cursor.execute(sql)
         cnx.commit()
 
