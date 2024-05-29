@@ -105,10 +105,10 @@ async def deleteArtThread(ctx):
     if cnx.is_connected():
         cursor = cnx.cursor()
         cursor.execute(f"USE server_{ctx.guild.id};")
-        sql = f"SELECT Name, Amount_of_tags_selected FROM channels" #WHERE Row_ID = {dlt_channel}"
+        sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels" #WHERE Row_ID = {dlt_channel}"
         cursor.execute(sql)
         artThreads = cursor.fetchall()
-        row_ids = [i[0] for i in artThreads]
+        row_ids = [i[1] for i in artThreads]
         dlt_fnd = []
 
         if dlt_channel in row_ids:
@@ -116,15 +116,15 @@ async def deleteArtThread(ctx):
             def check(m):
                 return m.author == ctx.author and m.channel == ctx.channel
 
-            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[0]}**? You will lose **{dlt_fnd[1]}** tags that were added there")
+            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
             response = await ctx.bot.wait_for('message', check=check)
             if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
-                dlt_name = dlt_channel.replace("_", "\_")
-                sql = f"SELECT Channel_ID FROM channels WHERE Name LIKE '{dlt_name}'"
-                cursor.execute(sql)
-                channel_id = cursor.fetchone()[0]
+                dlt_name = dlt_fnd[1].replace("_", "\_")
+                #sql = f"SELECT Channel_ID FROM channels WHERE Name LIKE '{dlt_name}'"
+                #cursor.execute(sql)
+                #channel_id = cursor.fetchone()[0]
 
-                sql = f"DROP TABLE IF EXISTS channel_{channel_id}"
+                sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
                 cursor.execute(sql)
 
                 sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
@@ -133,11 +133,11 @@ async def deleteArtThread(ctx):
 
                 cursor.close()
                 cnx.close()
-                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread")
+                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
             else:
                 cursor.close()
                 cnx.close()
-                await ctx.send(f"Since you did not verify, **{dlt_fnd[0]}** will be kept as an art thread")
+                await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
         else:
             cursor.close()
             cnx.close()
@@ -246,13 +246,13 @@ async def search(ctx):
             for i in name:
                 # This line below would be too intensive for a database that I intend to be useable in multiple servers and pushed to cloud. Keeping it for future refrence on improvement
                 # search_name.append(f"LOWER({i}) in (Name_1, Name_2, Name_3, Name_4, Name_5, Name_6, Name_7, Name_8, Name_9, Name_10, Name_11, Name_12, Name_13, Name_14, Name_15, Name_16, Name_17, Name_18, Name_19, Name_20, Name_21, Name_22, Name_23, Name_24)")
-                srch.append(f"'{i}' LIKE Name_{col_value}")
+                srch.append(f"'{i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")}' LIKE Name_{col_value}")
                 slct.append(f"Name_{col_value}")
                 col_value += 1
         if len(cat) > 0:
             col_value = 1
             for i in cat:
-                srch.append(f"'{i}' LIKE Category_{col_value}")
+                srch.append(f"'{i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")}' LIKE Category_{col_value}")
                 slct.append(f"Category_{col_value}")
                 col_value += 1
         if len(c_type) > 0:
@@ -306,30 +306,34 @@ async def search(ctx):
                     #uneven_list = ' '.join(k)
                     list_tags.append(' '.join(k))
                 #list_tags.insert(0, "ID | Name | Category | Type | Link")
-                id_max = 0
-                name_max = 0
-                category_max = 0
-                type_max = 0
-                for i in list_tags[1:]:
-                    cols = i.split("|")
-                    if len(cols[0]) > id_max:
-                        id_max = len(cols[0])
-                    if len(cols[1]) > name_max:
-                        name_max = len(cols[1])
-                    if len(cols[2]) > category_max:
-                        category_max = len(cols[2])
-                    if len(cols[3]) > type_max:
-                        type_max = len(cols[3])
+                #id_max = 0
+                #name_max = 0
+                #category_max = 0
+                #type_max = 0
+                id_max  = max(len(i.split("|")[0]) for i in list_tags[1:])
+                name_max = max(len(i.split("|")[1]) for i in list_tags[1:])
+                category_max = max(len(i.split("|")[2]) for i in list_tags[1:])
+                type_max = max(len(i.split("|")[3]) for i in list_tags[1:])
+                # for i in list_tags[1:]:
+                #     cols = i.split("|")
+                #     if len(cols[0]) > id_max:
+                #         id_max = len(cols[0])
+                #     if len(cols[1]) > name_max:
+                #         name_max = len(cols[1])
+                #     if len(cols[2]) > category_max:
+                #         category_max = len(cols[2])
+                #     if len(cols[3]) > type_max:
+                #         type_max = len(cols[3])
                 
                 for i in range(0, len(list_tags)):
                     cols = list_tags[i].split("|")
-                    if len(cols[0]) != id_max:
+                    if len(cols[0]) < id_max:
                         cols[0] += "\_" * (id_max - len(cols[0]))
-                    if len(cols[1]) != name_max:
+                    if len(cols[1]) < name_max:
                         cols[1] = "\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\_" * math.floor((name_max - len(cols[1])) / 2)
-                    if len(cols[2]) != category_max:
+                    if len(cols[2]) < category_max:
                         cols[2] = "\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\_" * math.floor((category_max - len(cols[2])) / 2)
-                    if len(cols[3]) != type_max:
+                    if len(cols[3]) < type_max:
                         cols[3] = "\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\_" * math.floor((type_max - len(cols[3])) / 2)
                     list_tags[i] = '|'.join(cols)
 
@@ -393,54 +397,58 @@ async def select(ctx):
                 cnx.close()
             await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
         else:
-            await ctx.send("Make sure that the ID you listed is a numerical number please")
+           await ctx.send("") ## This is supposed to use the name of the thread to search
     else:
-        srch_row = int(msg[0])
-        srch_link = msg[1].lower().replace("(", "%28").replace(")", "%29")
-        if "safebooru.org/index.php?page=post" in srch_link:
-            if cnx.is_connected():
-                link = srch_link.split("index.php?page=post", 1)[1].replace("_", "\_").replace("%", "\%")
-                cursor = cnx.cursor()
-                cursor.execute(f"USE safebooru_info;")
-                sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE '%{link}'"
-                cursor.execute(sql)
-                tag = cursor.fetchone()
-                tag_id = tag[0]
-                tag_name = ' '.join([i for i in tag[1:25] if i != None])
-                tag_category = ' '.join([i for i in tag[25:-2] if i != None])
-                tag_type = tag[-2]
-                tag_link = tag[-1]
+        if msg[0].isnumeric():
+            srch_row = int(msg[0])
+            srch_link = msg[1].lower().replace("(", "%28").replace(")", "%29")
+            if "safebooru.org/index.php?page=post" in srch_link:
+                if cnx.is_connected():
+                    link = srch_link.split("index.php?page=post", 1)[1].replace("_", "\_").replace("%", "\%")
+                    cursor = cnx.cursor()
+                    cursor.execute(f"USE safebooru_info;")
+                    sql = f"SELECT * FROM safebooru_tags WHERE Link LIKE '%{link}'"
+                    cursor.execute(sql)
+                    tag = cursor.fetchone()
+                    tag_id = tag[0]
+                    tag_name = ' '.join([i for i in tag[1:25] if i != None])
+                    tag_category = ' '.join([i for i in tag[25:-2] if i != None])
+                    tag_type = tag[-2]
+                    tag_link = tag[-1]
 
-                art_name = tag_name
-                clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+                    art_name = tag_name
+                    clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
 
-                cursor.execute(f"USE server_{ctx.guild.id};")
-                sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID = {srch_row}"
-                cursor.execute(sql)
-                channel_row = cursor.fetchone()
-                channel = channel_row[0]
-                channel_name = channel_row[1]
-                amt_tags = int(channel_row[2])
-                
-                sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
-                cursor.execute(sql, clean_tag)
-                
-                sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
-                cursor.execute(sql)
+                    cursor.execute(f"USE server_{ctx.guild.id};")
+                    sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels WHERE Row_ID = {srch_row}"
+                    cursor.execute(sql)
+                    channel_row = cursor.fetchone()
+                    channel = channel_row[0]
+                    channel_name = channel_row[1]
+                    amt_tags = int(channel_row[2])
+                    
+                    sql = "INSERT INTO channel_" + channel + " VALUES (%s, %s, %s, %s, %s, %s)"
+                    cursor.execute(sql, clean_tag)
+                    
+                    sql = f"UPDATE channels SET Amount_of_tags_selected = {amt_tags + 1} WHERE Row_ID = {srch_row}"
+                    cursor.execute(sql)
 
-                cnx.commit()
-                cursor.close()
-                cnx.close()
-            await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+                    cnx.commit()
+                    cursor.close()
+                    cnx.close()
+                await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+            else:
+                await ctx.send(f"Make sure the link you provided is spelt correctly and from safebooru posts")
         else:
-            await ctx.send(f"Make sure the link you provided is spelt correctly and from safebooru posts")
+            await ctx.send("") #this uses name to search
+        
         #else:
     #else:
     #    if 
 
 @bot.command()
 async def selectHere(ctx):
-    # add same things from select
+    # add same things from select. Make sure to check if channel database here exisits
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -540,11 +548,170 @@ async def howToSearchAndSelect(ctx):
 
 @bot.command()
 async def seeTagsInThread(ctx):
-    await ctx.send("")
+    # perhaps have the option to select by id
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+    channel_name = ctx.message.content[17:].strip()#.split()
+    #channel_name = ""
+    #art_name = ""
+
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"SELECT Channel_ID, Name FROM channels"
+        cursor.execute(sql)
+        artThreads = cursor.fetchall()
+        row_ids = [i[1] for i in artThreads]
+
+        if channel_name in row_ids:
+            channel = artThreads[row_ids.index(channel_name)]
+            #cursor.execute(f"USE channel_{channel[0]};")
+            sql = f"SELECT ID, Name, Category, Type, Link FROM channel_{channel[0]}"
+            cursor.execute(sql)
+            tags = cursor.fetchall()
+            cursor.close()
+            cnx.close()
+
+            list_tags = [["### __ID", "Name", "Category", "Type", " Link__"]]
+            #["### **ID** | **Name** | **Category** | **Type** | **Link**"]
+            
+            list_tags.extend([[str(j) for j in i] for i in tags])
+            id_max  = max(len(i[0]) for i in list_tags[1:]) + 1
+            name_max = max(len(i[1]) for i in list_tags[1:]) + 2
+            category_max = max(len(i[2]) for i in list_tags[1:]) + 2
+            type_max = max(len(i[3]) for i in list_tags[1:]) + 2
+            x = 0
+
+            for i in list_tags:
+                i[0] = f"{i[0]} "
+                i[1] = f" {i[1]} "
+                i[2] = f" {i[2]} "
+                i[3] = f" {i[3]} "
+                #print(cols[0])
+                if len(i[0]) < id_max:
+                    i[0] += "\_" * (id_max - len(i[0]))
+                if len(i[1]) < name_max:
+                    i[1] = "\_" * math.ceil((name_max - len(i[1])) / 2) + i[1] + "\_" * math.floor((name_max - len(i[1])) / 2)
+                if len(i[2]) < category_max:
+                    i[2] = "\_" * math.ceil((category_max - len(i[2])) / 2) + i[2] + "\_" * math.floor((category_max - len(i[2])) / 2)
+                if len(i[3]) < type_max:
+                    i[3] = "\_" * math.ceil((type_max - len(i[3])) / 2) + i[3] + "\_" * math.floor((type_max - len(i[3])) / 2)
+                #cols[4].replace("_", "\_")
+                if x != 0:
+                    i[4] = " [Link](<" + i[4].replace('_', '\_') + ">)"
+                #cols[4] = f"[Link](<{cols[4].replace('_', '\_')}>)"
+                # f"[Link](<{k[-1]}>)"
+                list_tags[x] = "|".join(i)
+                x += 1
+                
+
+            all_tags = '\n'.join(list_tags)
+            await ctx.send(f"{all_tags}")
+        else:
+            cursor.close()
+            cnx.close()
+            await ctx.send(f"The channel **{channel_name}** does not exist in our file. Make sure to check the spelling or the file to see if the name is different from what it is now")
+    #await ctx.send("")
 
 @bot.command()
 async def deleteTagInThread(ctx):
-    await ctx.send("")
+    # maybe use ID. Probably not but need to have here to remind that it would be here as well if i add it
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+    dlt_info = ctx.message.content[19:].split()
+    channel_name = dlt_info[0]
+    dlt_tag = dlt_info[1]
+
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels"
+        cursor.execute(sql)
+        artThreads = cursor.fetchall()
+        row_names = [i[1] for i in artThreads]
+        
+        if channel_name in row_names:
+            channel = artThreads[row_names.index(channel_name)]
+            #cursor.execute(f"USE channel_{channel[0]};")
+            if dlt_tag.isnumeric(): 
+                sql = f"SELECT ID, Name FROM channel_{channel[0]}"
+                cursor.execute(sql)
+                tags = cursor.fetchall()
+                tag_ids = [str(i[0]) for i in tags]
+
+                if dlt_tag in tag_ids:
+                    dlt_fnd = tags[tag_ids.index(dlt_tag)]
+                    def check(m):
+                        return m.author == ctx.author and m.channel == ctx.channel
+
+                    await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}** from **{channel[1]}**?")
+                    response = await ctx.bot.wait_for('message', check=check)
+                    if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+                        dlt_name = dlt_fnd[1].replace("_", "\_").replace("%", "\%")
+
+                        sql = f"DELETE FROM channel_{channel[0]} WHERE Name LIKE '{dlt_name}'"
+                        cursor.execute(sql)
+
+                        sql = f"UPDATE channels SET Amount_of_tags_selected = {channel[2] - 1} WHERE Channel_ID = {channel[0]}"
+                        cursor.execute(sql)
+                        cnx.commit()
+
+                        cursor.close()
+                        cnx.close()
+                        await ctx.send(f"The tag **{dlt_name}** has been removed from **{channel[1]}**. Changes may take a moment to take affect")
+                    else:
+                        cursor.close()
+                        cnx.close()
+                        await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept")
+                else:
+                    await ctx.send(f"The tag under **{dlt_tag}** does not exist in **{channel[1]}**. Make sure to check whether the tag is in another channel or if its the correct number associated")
+            else:
+                sql = f"SELECT ID, Name, Link FROM channel_{channel[0]}"
+                cursor.execute(sql)
+                tags = cursor.fetchall()
+                tag_ids = [i[2] for i in tags]
+
+                link = dlt_tag.replace("(", "%28").replace(")", "%29")
+                # print(link)
+                # print(tag_ids)
+                if link in tag_ids:
+                    dlt_fnd = tags[tag_ids.index(link)]
+                    def check(m):
+                        return m.author == ctx.author and m.channel == ctx.channel
+
+                    await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}** from **{channel[1]}**?")
+                    response = await ctx.bot.wait_for('message', check=check)
+                    if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+                        dlt_name = dlt_fnd[1].replace("_", "\_").replace("%", "\%")
+
+                        sql = f"DELETE FROM channel_{channel[0]} WHERE Name LIKE '{dlt_name}'"
+                        cursor.execute(sql)
+
+                        sql = f"UPDATE channels SET Amount_of_tags_selected = {channel[2] - 1} WHERE Channel_ID = {channel[0]}"
+                        cursor.execute(sql)
+                        cnx.commit()
+
+                        cursor.close()
+                        cnx.close()
+                        await ctx.send(f"The tag **{dlt_name}** has been removed from **{channel[1]}**. Changes may take a moment to take affect")
+                    else:
+                        cursor.close()
+                        cnx.close()
+                        await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept")
+                else:
+                    await ctx.send(f"The [link](<{dlt_tag}>) provided does not exist in **{channel[1]}**. Make sure to check whether the link is in another channel or that the full url was used")
+        else:
+            cursor.close()
+            cnx.close()
+            await ctx.send(f"The channel **{channel_name}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+    # await ctx.send("")
 
 #@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
 #async def setArtThread(ctx, link):
@@ -620,11 +787,11 @@ async def stopArtShow(ctx):
 
     await ctx.send("Ending the show")
 
-async def ArtShow(ctx):
+async def artShow(ctx):
     await print("This is where the art grabbing will start")
 
 #@tasks.loop(seconds = 5)
-async def artShow(ctx):
-    None
+#async def artShow(ctx):
+#    None
 
 bot.run(safebooru_bot)
