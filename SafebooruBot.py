@@ -27,13 +27,6 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix='!!', intents=intents)
 
-#safebooru_dbs = mysql.connector.connect(
-#    host=ep,
-#    user=user,
-#    password=ps
-#)
-
-
 @bot.event
 async def on_guild_join(guild):
     cnx = mysql.connector.connect(
@@ -61,8 +54,7 @@ async def on_guild_join(guild):
 
 @bot.event
 async def on_ready():
-    print(f'{bot.user.name} has connected to Discord!')
-   
+    print(f'{bot.user.name} has connected to Discord!') 
 
 @bot.command(help='Sets the current channel as a location for images to be sent to')
 async def setArtThread(ctx):
@@ -142,6 +134,54 @@ async def deleteArtThread(ctx):
             cursor.close()
             cnx.close()
             await ctx.send(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+        # await ctx.send(f"test: {dlt_channel}")
+
+@bot.command()
+async def deleteArtThreadHere(ctx):
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+    dlt_channel = str(ctx.channel.id)#.message.content.split()[1]
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{ctx.guild.id};")
+        sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels" 
+        cursor.execute(sql)
+        artThreads = cursor.fetchall()
+        row_ids = [i[0] for i in artThreads]
+        dlt_fnd = []
+
+        if dlt_channel in row_ids:
+            dlt_fnd = artThreads[row_ids.index(dlt_channel)]
+            def check(m):
+                return m.author == ctx.author and m.channel == ctx.channel
+
+            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
+            response = await ctx.bot.wait_for('message', check=check)
+            if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+                dlt_name = dlt_fnd[1].replace("_", "\_")
+
+                sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
+                cursor.execute(sql)
+
+                sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
+                cursor.execute(sql)
+                cnx.commit()
+
+                cursor.close()
+                cnx.close()
+                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
+            else:
+                cursor.close()
+                cnx.close()
+                await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
+        else:
+            cursor.close()
+            cnx.close()
+            await ctx.send(f"The channel **{ctx.channel.name}** does not exist in our file.")
         # await ctx.send(f"test: {dlt_channel}")
 
 @bot.command()
@@ -246,13 +286,15 @@ async def search(ctx):
             for i in name:
                 # This line below would be too intensive for a database that I intend to be useable in multiple servers and pushed to cloud. Keeping it for future refrence on improvement
                 # search_name.append(f"LOWER({i}) in (Name_1, Name_2, Name_3, Name_4, Name_5, Name_6, Name_7, Name_8, Name_9, Name_10, Name_11, Name_12, Name_13, Name_14, Name_15, Name_16, Name_17, Name_18, Name_19, Name_20, Name_21, Name_22, Name_23, Name_24)")
-                srch.append(f"'{i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")}' LIKE Name_{col_value}")
+                j = i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")
+                srch.append(f"'{j}' LIKE Name_{col_value}")
                 slct.append(f"Name_{col_value}")
                 col_value += 1
         if len(cat) > 0:
             col_value = 1
             for i in cat:
-                srch.append(f"'{i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")}' LIKE Category_{col_value}")
+                j = i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")
+                srch.append(f"'{j}' LIKE Category_{col_value}")
                 slct.append(f"Category_{col_value}")
                 col_value += 1
         if len(c_type) > 0:
@@ -497,7 +539,7 @@ async def selectHere(ctx):
             cnx.commit()
             cursor.close()
             cnx.close()
-        await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
+            await ctx.send(f"The tag **{art_name}** has been added to **{channel_name}**. I hope you enjoy the art it brings!")
     #else:
     #    await ctx.send("Make sure that the ID you listed is a numerical number please")
     else:
@@ -683,8 +725,8 @@ async def deleteTagInThread(ctx):
                 # print(tag_ids)
                 if link in tag_ids:
                     dlt_fnd = tags[tag_ids.index(link)]
-                    def check(m):
-                        return m.author == ctx.author and m.channel == ctx.channel
+                    # def check(m):
+                    #    return m.author == ctx.author and m.channel == ctx.channel
 
                     await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}** from **{channel[1]}**?")
                     response = await ctx.bot.wait_for('message', check=check)
@@ -713,6 +755,9 @@ async def deleteTagInThread(ctx):
             await ctx.send(f"The channel **{channel_name}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
     # await ctx.send("")
 
+@bot.command()
+async def deleteTagHere(ctx):
+    None
 #@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
 #async def setArtThread(ctx, link):
 #    await db.collection('character_threads').add({'thread_id': ctx.channel.id, 'link': link, 'image': 'jpg'})
