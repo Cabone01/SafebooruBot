@@ -6,6 +6,7 @@ import firebase_admin
 from selenium import webdriver
 from firebase_admin import credentials
 from firebase_admin import firestore_async
+from paginator import PaginatorView
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.wait import WebDriverWait
@@ -13,6 +14,7 @@ from selenium.common.exceptions import NoSuchElementException, JavascriptExcepti
 from selenium.webdriver.support import expected_conditions as EC
 import discord
 from bot_token import safebooru_bot
+from discord import app_commands
 from discord.ext import commands
 from discord.utils import find
 from discord.ext import tasks
@@ -25,7 +27,7 @@ intents.members = True
 intents.messages = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix=".", intents=intents)
 
 @bot.event
 async def on_ready():
@@ -60,48 +62,63 @@ async def on_guild_join(guild):
         cursor.close()
     cnx.commit()
     cnx.close()
+    
+@bot.tree.command(name="test")
+# @app_commands.checks.bot_has_permissions()
+async def words_are_here(interaction: discord.Interaction):
+    await interaction.response.send_message(f"Channel_id: {interaction.channel_id} \n Guild_id: {interaction.guild_id}")
+
+# @bot.error
+# async def on_app_command_error(interaction, error):
+#     if isinstance(error.missingpermissions, app_commands.BotMissingPermissions):
+#         await interaction.response.send_message(error)
+#     else:
+#         raise error
 
 @bot.tree.command()#help='Sets the current channel as a location for images to be sent to')
-async def setArtThread(ctx):
+async def set_art_thread(interaction: discord.Interaction):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
-    channel_id = "channel_" + str(ctx.channel.id)
+    #print(interaction.channel.name)
+    #print(interaction.channel_name)
+    #print(interaction.guild_id)
+    channel_id = "channel_" + str(interaction.channel_id)
 
     if cnx.is_connected():
         cursor = cnx.cursor()
-        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute(f"USE server_{interaction.guild_id};")
         cursor.execute('SHOW TABLES')
         table_names = [table[0] for table in cursor.fetchall()]
 
         if channel_id in table_names:
-            await ctx.send("Silly. This channel is already a designated place for art")
+            await interaction.response.send_message("Silly. This channel is already a designated place for art")
         else:
             #cursor.execute(f"DROP TABLE IF EXISTS {channel_id};")
             cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL, Name VARCHAR(256), Category VARCHAR(256), Type VARCHAR(16), Link VARCHAR(2400), Latest_art VARCHAR(2400), PRIMARY KEY(ID));")
             sql = "INSERT INTO channels (Channel_ID, Name, Amount_of_tags_selected) VALUES (%s, %s, %s)"
-            row = (ctx.channel.id, ctx.channel.name, 0)
+            row = (interaction.channel_id, interaction.channel.name, 0)
             cursor.execute(sql, row)
             cnx.commit()
             
-            await ctx.send("This channel has been set as a location for art")
+            await interaction.response.send_message("This channel has been set as a location for art")
         cursor.close()
     cnx.close()
 
-@bot.tree.command()
-async def deleteArtThread(ctx):
+@bot.tree.command() #
+async def delete_art_thread(interaction: discord.Interaction, channel_name: str):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
-
-    dlt_channel = ctx.message.content.lower().split()[1]
+    
+    dlt_channel = channel_name.lower() #ctx.message.content.lower().split()[1]
     if cnx.is_connected():
         cursor = cnx.cursor()
-        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute(f"USE server_{interaction.guild_id};")
         sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels"
         cursor.execute(sql)
         artThreads = cursor.fetchall()
@@ -110,46 +127,46 @@ async def deleteArtThread(ctx):
 
         if dlt_channel in row_ids:
             dlt_fnd = artThreads[row_ids.index(dlt_channel)]
-            def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel
+            # def check(m):
+            #     return m.author == ctx.author and m.channel == ctx.channel
 
-            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
-            response = await ctx.bot.wait_for('message', check=check)
-            if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
-                dlt_name = dlt_fnd[1].replace("_", "\_")
+            #await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
+            #response = await ctx.bot.wait_for('message', check=check)
+            #if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+            dlt_name = dlt_fnd[1].replace("_", "\_")
 
-                sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
-                cursor.execute(sql)
+            sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
+            cursor.execute(sql)
 
-                sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
-                cursor.execute(sql)
-                cnx.commit()
+            sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
+            cursor.execute(sql)
+            cnx.commit()
 
-                cursor.close()
-                cnx.close()
-                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
-            else:
-                cursor.close()
-                cnx.close()
-                await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
+            cursor.close()
+            cnx.close()
+            await interaction.response.send_message(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
+            # else:
+            #     cursor.close()
+            #     cnx.close()
+            #     await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
         else:
             cursor.close()
             cnx.close()
-            await ctx.send(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+            await interaction.response.send_message(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
         # await ctx.send(f"test: {dlt_channel}")
 
-@bot.tree.command()
-async def deleteArtThreadHere(ctx):
+@bot.tree.command() #
+async def delete_art_thread_here(interaction: discord.Interaction):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
 
-    dlt_channel = str(ctx.channel.id)#.message.content.split()[1]
+    dlt_channel = str(interaction.channel.id)#.message.content.split()[1]
     if cnx.is_connected():
         cursor = cnx.cursor()
-        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute(f"USE server_{interaction.guild_id};")
         sql = f"SELECT Channel_ID, Name, Amount_of_tags_selected FROM channels" 
         cursor.execute(sql)
         artThreads = cursor.fetchall()
@@ -158,36 +175,36 @@ async def deleteArtThreadHere(ctx):
 
         if dlt_channel in row_ids:
             dlt_fnd = artThreads[row_ids.index(dlt_channel)]
-            def check(m):
-                return m.author == ctx.author and m.channel == ctx.channel
+            # def check(m):
+            #     return m.author == ctx.author and m.channel == ctx.channel
 
-            await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
-            response = await ctx.bot.wait_for('message', check=check)
-            if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
-                dlt_name = dlt_fnd[1].replace("_", "\_")
+            # await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}**? You will lose **{dlt_fnd[2]}** tags that were added there")
+            # response = await ctx.bot.wait_for('message', check=check)
+            # if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
+            dlt_name = dlt_fnd[1].replace("_", "\_")
 
-                sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
-                cursor.execute(sql)
+            sql = f"DROP TABLE IF EXISTS channel_{dlt_fnd[0]}"
+            cursor.execute(sql)
 
-                sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
-                cursor.execute(sql)
-                cnx.commit()
+            sql = f"DELETE FROM channels WHERE Name LIKE '{dlt_name}'"
+            cursor.execute(sql)
+            cnx.commit()
 
-                cursor.close()
-                cnx.close()
-                await ctx.send(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
-            else:
-                cursor.close()
-                cnx.close()
-                await ctx.send(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
+            cursor.close()
+            cnx.close()
+            await interaction.response.send_message(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
+            # else:
+            #     cursor.close()
+            #     cnx.close()
+            #     await interaction.response.send_message(f"Since you did not verify, **{dlt_fnd[1]}** will be kept as an art thread")
         else:
             cursor.close()
             cnx.close()
-            await ctx.send(f"The channel **{ctx.channel.name}** does not exist in our file.")
+            await interaction.response.send_message(f"This channel **{interaction.channel.name}** does not exist in our file.")
         # await ctx.send(f"test: {dlt_channel}")
 
 @bot.tree.command()
-async def seeArtThreads(ctx):
+async def see_art_threads(self, interaction: discord.Interaction):
     # Maybe keep the code that evens out the text (despite it not being by much or at all)
     cnx = mysql.connector.connect(
     host=host,
@@ -195,11 +212,11 @@ async def seeArtThreads(ctx):
     password=password
     )
     
-    threads = ["### __Channel Name | Number of tags added__"] #[]
+    threads = []#["### __Channel Name | Number of tags added__"] #[]
     #max_name_len = 0
     if cnx.is_connected():
         cursor = cnx.cursor()  
-        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute(f"USE server_{interaction.guild_id};")
         sql = f"SELECT Name, Amount_of_tags_selected FROM channels"
         cursor.execute(sql)
         threads_tup = cursor.fetchall()
@@ -221,18 +238,36 @@ async def seeArtThreads(ctx):
             #channel = " | ".join([name, num_tags])
             threads.append(" | ".join([name, num_tags]))
 
-    threads = "\n".join(threads) 
-    await ctx.send(f"{threads}")
+    ##threads = "\n".join(threads) 
+    thread_chunks = [threads[i:i + 5] for i in range(0, len(threads), 3)]
+    embeds = []
+    for i in discord.utils.as_chunks(thread_chunks, 1):
+        embed = discord.Embed(title="Test")
+        print(i)
+        for j in i:
+            k = "\n".join(j)
+            embed.add_field(name="### __Channel Name | Number of tags added__", value=f"{k}")
+            print(k)
+            print(embed)
+        #print(j)
+        embeds.append(embed)
+    
+    view = PaginatorView(embeds)
+    await interaction.response.send_message(embeds=view.initial, view=view)
+        #for j in i:
+            
+            #embed.add_field()
+    ##await interaction.response.send_message(f"{threads}")
 
-@bot.tree.command()
-async def setLimit(ctx):
+@bot.tree.command() #
+async def set_limit(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
     
-    number = ctx.message.content[10:].strip()
+    number = ctx.message.content[11:].strip()
 
     if number.isnumeric():
         number = int(number)
@@ -254,7 +289,7 @@ async def setLimit(ctx):
     else:
         await ctx.send(f"There are letters and/or symbols in your request. Can you use only numeric values please?")                       
 
-@bot.tree.command()
+@bot.tree.command() #
 async def search(ctx):
     msg = ctx.message.content[8:].strip().lower().split("|")
     name = []
@@ -369,7 +404,7 @@ async def search(ctx):
             else:
                 await ctx.send("I could not find anything on this search. If you need an example on how to search, use the /howToSearchandSelect command")
 
-@bot.tree.command()
+@bot.tree.command() #
 async def select(ctx):
     # add if database is not up and if nothing shows up in search
     cnx = mysql.connector.connect(
@@ -483,15 +518,15 @@ async def select(ctx):
         else:
             await ctx.send(f"It would appear **{channel_name}** does not exist in our file. Make sure to either set that channel as an art thread or to check the spelling")
 
-@bot.tree.command()
-async def selectHere(ctx):
+@bot.tree.command() #
+async def select_here(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
 
-    msg = ctx.message.content[12:].lower().strip().split()
+    msg = ctx.message.content[13:].lower().strip().split()
     channel_id = str(ctx.channel.id)
 
     if cnx.is_connected():
@@ -596,19 +631,19 @@ async def selectHere(ctx):
         else:
             await ctx.send(f"It would appear **{ctx.channel.name}** does not exist in our file. Make sure to set this channel as an art thread before you add to it")
 
-@bot.tree.command()
-async def howToSearchAndSelect(ctx):
+@bot.tree.command() #
+async def how_to_search_and_select(ctx):
     await ctx.send("")
 
-@bot.tree.command()
-async def seeTagsInThread(ctx):
+@bot.tree.command() #
+async def see_tags_in_thread(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
 
-    channel_name = ctx.message.content[17:].lower().strip()
+    channel_name = ctx.message.content[20:].lower().strip()
     if cnx.is_connected():
         cursor = cnx.cursor()
         cursor.execute(f"USE server_{ctx.guild.id};")
@@ -663,8 +698,8 @@ async def seeTagsInThread(ctx):
             else:
                 await ctx.send(f"Make sure when using this command to input the channel's name you are looking for. If you are trying to see the tags in the current channel, use the /seeTagsInHere command to see the tags in the current channel")
 
-@bot.tree.command()
-async def seeTagsInHere(ctx):
+@bot.tree.command() #
+async def see_tags_in_here(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -724,15 +759,15 @@ async def seeTagsInHere(ctx):
             cnx.close()
             await ctx.send(f"The channel **{channel_name}** does not exist in our file. If there is a mistake, make sure this channel is the orginal one that was set as an art thread")
 
-@bot.tree.command()
-async def deleteTagInThread(ctx):
+@bot.tree.command() #
+async def delete_tag_in_thread(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
 
-    dlt_info = ctx.message.content[19:].lower().split()
+    dlt_info = ctx.message.content[22:].lower().split()
     channel_name = dlt_info[0]
     dlt_tag = dlt_info[1]
 
@@ -819,14 +854,14 @@ async def deleteTagInThread(ctx):
             await ctx.send(f"The channel **{channel_name}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
 
 @bot.tree.command()
-async def deleteTagHere(ctx):
+async def delete_tag_here(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
     password=password
     )
 
-    dlt_info = ctx.message.content[15:].lower().split()
+    dlt_info = ctx.message.content[17:].lower().split()
     channel_name = ctx.channel.name
     channel_id = str(ctx.channel.id)
     dlt_tag = dlt_info[0]
@@ -915,12 +950,8 @@ async def deleteTagHere(ctx):
             cnx.close()
             await ctx.send(f"It appears **{channel_name}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
 
-#@bot.command(help='Sets the current channel as the location of new images to be sent in from the provided Safebooru link')
-#async def setArtThread(ctx, link):
-#    await db.collection('character_threads').add({'thread_id': ctx.channel.id, 'link': link, 'image': 'jpg'})
-
 @bot.tree.command()#help='Starts displaying the latest new images from the given links')
-async def startArtShow(ctx):
+async def start_art_show(ctx):
     #global keep_going 
     #keep_going = True
 
@@ -968,7 +999,7 @@ async def startArtShow(ctx):
     #    await asyncio.sleep(1)
 
 @bot.tree.command()#help='Stops the bot from searching for new images to post')
-async def stopArtShow(ctx):
+async def stop_art_show(ctx):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -989,8 +1020,8 @@ async def stopArtShow(ctx):
 
     await ctx.send("Ending the show")
 
-async def artShow(ctx):
-    await print("This is where the art grabbing will start")
+#async def artShow(ctx):
+#    await print("This is where the art grabbing will start")
 
 bot.run(safebooru_bot)
 
