@@ -39,6 +39,12 @@ async def on_ready():
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
         print(e)
+    
+    # if artShow.is_running() != True: 
+    #     for guild in bot.guilds:
+    #         print(guild.id)
+    #         asyncio.create_task(artShow.start(guild.id))
+
 
 @bot.event
 async def on_guild_join(guild):
@@ -91,16 +97,16 @@ async def set_art_thread(interaction: discord.Interaction):
         table_names = [table[0] for table in cursor.fetchall()]
 
         if channel_id in table_names:
-            await interaction.response.send_message("Silly. This channel is already a designated place for art")
+            await interaction.response.send_message("Silly. This channel is already a designated place for art", ephemeral=True)
         else:
             #cursor.execute(f"DROP TABLE IF EXISTS {channel_id};")
-            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL, Name VARCHAR(256), Category VARCHAR(256), Type VARCHAR(16), Link VARCHAR(2400), Latest_art VARCHAR(2400), PRIMARY KEY(ID));")
+            cursor.execute(f"Create TABLE {channel_id}(ID INT NOT NULL, Name VARCHAR(256), Category VARCHAR(256), Type VARCHAR(16), Link VARCHAR(2400), Latest_art VARCHAR(240), PRIMARY KEY(ID));")
             sql = "INSERT INTO channels (Channel_ID, Name, Amount_of_tags_selected) VALUES (%s, %s, %s)"
             row = (interaction.channel_id, interaction.channel.name, 0)
             cursor.execute(sql, row)
             cnx.commit()
             
-            await interaction.response.send_message("This channel has been set as a location for art")
+            await interaction.response.send_message("This channel has been set as a location for art", ephemeral=True)
         cursor.close()
     cnx.close()
 
@@ -145,7 +151,7 @@ async def delete_art_thread(interaction: discord.Interaction, channel: Optional[
 
             cursor.close()
             cnx.close()
-            await interaction.response.send_message(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect")
+            await interaction.response.send_message(f"The channel **{dlt_name}** is no longer an art thread. Changes may take a moment to take affect", ephemeral=True)
             # else:
             #     cursor.close()
             #     cnx.close()
@@ -153,7 +159,7 @@ async def delete_art_thread(interaction: discord.Interaction, channel: Optional[
         else:
             cursor.close()
             cnx.close()
-            await interaction.response.send_message(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+            await interaction.response.send_message(f"The channel **{dlt_channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now", ephemeral=True)
 
 # @bot.tree.command(description="Dead code. Replaced by variant. Please dont use") # Unused
 # async def delete_art_thread_here(interaction: discord.Interaction):
@@ -259,7 +265,7 @@ async def see_art_threads(interaction: discord.Interaction):
 
 @bot.tree.command(description="Changes the amount of tags collected from the search")
 #@discord.app_commands.describe(value = "Enter the name of the channel that you no longer want as an art thread. If left empty, it will delete the current channel's art thread")
-async def change_limit(interaction: discord.Interaction, value: app_commands.Range[int, 5, 15]):#int):
+async def change_limit(interaction: discord.Interaction, value: app_commands.Range[int, 5, 25]):#int):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -281,7 +287,7 @@ async def change_limit(interaction: discord.Interaction, value: app_commands.Ran
 
         cursor.close()
         cnx.close()
-    await interaction.response.send_message(f"The amount of tags found from the search command is now set to {value}")
+    await interaction.response.send_message(f"The amount of tags found from the search command is now set to {value}", ephemeral=True)
     # else:
     #     await interaction.response.send_message(f"{number} is too high of a value. Please keep it at 25 or below")
 
@@ -334,7 +340,7 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
         error_text.append(f"You exceeded the amount of words for the **type** by {len(c_type) - 1}. Make sure to use only 1 word when searching the **type**")
 
     if len(error_text) > 0:
-        await interaction.response.send_message('\n \n'.join(error_text))
+        await interaction.response.send_message('\n \n'.join(error_text), ephemeral=True)
     else:
         srch = []
         slct = []
@@ -352,7 +358,7 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
             col_value = 1
             for i in category:
                 j = i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")
-                srch.append(f"'{j}' LIKE Category_{col_value}")
+                srch.append(f"Category_{col_value} LIKE '{j}' ")# (f"'{j}' LIKE Category_{col_value}")
                 slct.append(f"Category_{col_value}")
                 col_value += 1
         if len(c_type) > 0:
@@ -373,14 +379,17 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
             cursor.execute(sql)
             limit = cursor.fetchone()[0]
             
+            #print(srch)
+            #print(' AND '.join(srch))
             cursor.execute(f"USE safebooru_info;")
             sql = f"SELECT * FROM safebooru_tags WHERE {' AND '.join(srch)} LIMIT {limit}"
             cursor.execute(sql)
             tags = cursor.fetchall()
             cursor.close()
             cnx.close()
-
-            list_tags = ["### __ID | Name | Category | Type | Link__"]
+            
+            #print(tags)
+            list_tags = []#["### __ID | Name | Category | Type | Link__"]
 
             if len(tags) != 0:
                 #print(tags)
@@ -403,29 +412,114 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
                     list_tags.append(' '.join(k))
 
                 # Here is where the embed will need to take affect
-                id_max  = max(len(i.split("|")[0]) for i in list_tags[1:])
-                name_max = max(len(i.split("|")[1]) for i in list_tags[1:])
-                category_max = max(len(i.split("|")[2]) for i in list_tags[1:])
-                type_max = max(len(i.split("|")[3]) for i in list_tags[1:])
+                list_title = "__ID | Name | Category | Type | Link__"
+                tag_chunks = [list_tags[i * 5:(i + 1) * 5] for i in range((len(list_tags) + 5 - 1) // 5)]
+                # print(tag_chunks)
+                embeds = []
+                for chunk in discord.utils.as_chunks(tag_chunks, 1):
+                    embed = discord.Embed()
+                    
+                    
+                    for tags in chunk:
+                        #print(len(tags))
+                        #  for tag in tags:
+                        #tags = tags.split("|")
+                        #print(tags)
+
+                        id_max  = max(len(i.split("|")[0]) for i in tags)
+                        name_max = max(len(i.split("|")[1]) for i in tags)
+                        category_max = max(len(i.split("|")[2]) for i in tags)
+                        type_max = max(len(i.split("|")[3]) for i in tags)
+                        # id_max  = max(len(i[0]) for i in tags)
+                        # name_max = max(len(i[1]) for i in tags)
+                        # category_max = max(len(i[2]) for i in tags)
+                        # type_max = max(len(i[3]) for i in tags)
+                        #title = list_title[:]
+                        tags.insert(0, list_title)
+                        #print(tags)
+                        x = 0
+                        #print(len(tags))
+                        #tags_splt = tags.split("|")
+                        for tag in tags:
+                        # for i in range(0, len(list_tags)):
+                        #     cols = list_tags[i].split("|")
+                        #     if len(cols[0]) < id_max:
+                        #         cols[0] += "\_" * (id_max - len(cols[0]))
+                        #     if len(cols[1]) < name_max:
+                        #         cols[1] = "\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\_" * math.floor((name_max - len(cols[1])) / 2)
+                        #     if len(cols[2]) < category_max:
+                        #         cols[2] = "\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\_" * math.floor((category_max - len(cols[2])) / 2)
+                        #     if len(cols[3]) < type_max:
+                        #         cols[3] = "\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\_" * math.floor((type_max - len(cols[3])) / 2)
+                        #     list_tags[i] = '|'.join(cols)
+                            #print(tag)
+                            # tag[0] = f"{tag[0]} "
+                            # tag[1] = f" {tag[1]} "
+                            # tag[2] = f" {tag[2]} "
+                            # tag[3] = f" {tag[3]} "
+                            tag = tag.split("|")
+                            if len(tag[0]) < id_max:
+                                tag[0] += "\_" * (id_max - len(tag[0]))
+                            if len(tag[1]) < name_max:
+                                tag[1] = "\_" * math.ceil((name_max - len(tag[1])) / 2) + tag[1] + "\_" * math.floor((name_max - len(tag[1])) / 2)
+                            if len(tag[2]) < category_max:
+                                tag[2] = "\_" * math.ceil((category_max - len(tag[2])) / 2) + tag[2] + "\_" * math.floor((category_max - len(tag[2])) / 2)
+                            if len(tag[3]) < type_max:
+                                tag[3] = "\_" * math.ceil((type_max - len(tag[3])) / 2) + tag[3] + "\_" * math.floor((type_max - len(tag[3])) / 2)
+                            #if x != 0:
+                            #    tag[4] = " [Link](<" + tag[4].replace('_', '\_') + ">)"
+                            tags[x] = "|".join(tag)
+                            x += 1
+                            #print(tag)
+                            #print(x)
+                        k = "\n".join(tags[1:])
+                        embed.add_field(name=f"{tags[0]}", value=f"{k}")
+                        #  tags
+                    
+                    
+                    
+                    
+                    
+                    #print(i)
+                    # for tag in chunk:
+                    #     print(f"\n \n{tag}")
+                    #     k = "\n".join(tag)
+                    #     embed.add_field(name=f"{list_title}", value=f"{k}")
+                    #     print(len(k))
+                        #print(embed)
+                    #print(j)
+                    embeds.append(embed)
+
+                #print(len(embeds))
+                view = PaginatorView(embeds)
+                await interaction.response.send_message(embed=view.initial, view=view)
+
+
+
+
+                # id_max  = max(len(i.split("|")[0]) for i in list_tags[1:])
+                # name_max = max(len(i.split("|")[1]) for i in list_tags[1:])
+                # category_max = max(len(i.split("|")[2]) for i in list_tags[1:])
+                # type_max = max(len(i.split("|")[3]) for i in list_tags[1:])
 
                 
-                for i in range(0, len(list_tags)):
-                    cols = list_tags[i].split("|")
-                    if len(cols[0]) < id_max:
-                        cols[0] += "\_" * (id_max - len(cols[0]))
-                    if len(cols[1]) < name_max:
-                        cols[1] = "\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\_" * math.floor((name_max - len(cols[1])) / 2)
-                    if len(cols[2]) < category_max:
-                        cols[2] = "\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\_" * math.floor((category_max - len(cols[2])) / 2)
-                    if len(cols[3]) < type_max:
-                        cols[3] = "\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\_" * math.floor((type_max - len(cols[3])) / 2)
-                    list_tags[i] = '|'.join(cols)
+                # for i in range(0, len(list_tags)):
+                #     cols = list_tags[i].split("|")
+                #     if len(cols[0]) < id_max:
+                #         cols[0] += "\_" * (id_max - len(cols[0]))
+                #     if len(cols[1]) < name_max:
+                #         cols[1] = "\_" * math.ceil((name_max - len(cols[1])) / 2) + cols[1] + "\_" * math.floor((name_max - len(cols[1])) / 2)
+                #     if len(cols[2]) < category_max:
+                #         cols[2] = "\_" * math.ceil((category_max - len(cols[2])) / 2) + cols[2] + "\_" * math.floor((category_max - len(cols[2])) / 2)
+                #     if len(cols[3]) < type_max:
+                #         cols[3] = "\_" * math.ceil((type_max - len(cols[3])) / 2) + cols[3] + "\_" * math.floor((type_max - len(cols[3])) / 2)
+                #     list_tags[i] = '|'.join(cols)
 
-                fnd_tags = '\n'.join(list_tags)
-                print(len(fnd_tags))
-                await interaction.response.send_message(f"{fnd_tags}")
+                # fnd_tags = '\n'.join(list_tags)
+                # print(len(fnd_tags))
+                # await interaction.response.send_message(f"{fnd_tags}")
             else:
-                await interaction.response.send_message("I could not find anything on this search. If you need an example on how to search, use the /howToSearchandSelect command")
+                await interaction.response.send_message("I could not find anything on this search. If you need an example on how to search, use the /howToSearchandSelect command", ephemeral=True)
 
 @bot.tree.command(description="Select the tag you want to add to an art thread")
 @app_commands.describe(channel = "Enter the name of the channel you want to add the tag to. If left empty, it be added to the current channel", id_or_link = "Give the id or link of the tag you want to have added")
@@ -472,7 +566,7 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                         tag_category = ' '.join([i for i in tag[25:-2] if i != None])
                         tag_type = tag[-2]
                         tag_link = tag[-1]
-                        clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+                        clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "", "")
 
                         cursor.execute(f"USE server_{interaction.guild_id};")
                         sql = "INSERT INTO channel_" + channel_fnd[0] + " VALUES (%s, %s, %s, %s, %s, %s)"
@@ -484,15 +578,15 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                         cnx.commit()
                         cursor.close()
                         cnx.close()
-                        await interaction.response.send_message(f"The tag **{tag_name}** has been added to **{channel}**. I hope you enjoy the art it brings!")
+                        await interaction.response.send_message(f"The tag **{tag_name}** has been added to **{channel}**. I hope you enjoy the art it brings!", ephemeral=True)
                     else:
-                        await interaction.response.send_message(f"It would appear that there is no tag under **{tag_id}**")
+                        await interaction.response.send_message(f"It would appear that there is no tag under **{tag_id}**", ephemeral=True)
 
                 else:
                     cursor.close()
                     cnx.close()
                     tag = tags[tag_ids.index(tag_id)]
-                    await interaction.response.send_message(f"It would appear that **{tag[1]}** has already been added to **{channel}**")
+                    await interaction.response.send_message(f"It would appear that **{tag[1]}** has already been added to **{channel}**", ephemeral=True)
             else:
                 srch_link = id_or_link.lower().replace("(", "%28").replace(")", "%29").replace("www.", "")
                 tag_links = [i[2] for i in tags]
@@ -519,7 +613,7 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                             tag_category = ' '.join([i for i in tag[25:-2] if i != None])
                             tag_type = tag[-2]
                             tag_link = tag[-1]
-                            clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
+                            clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "", "")
 
                             cursor.execute(f"USE server_{interaction.guild_id};")
                             sql = "INSERT INTO channel_" + channel_fnd[0] + " VALUES (%s, %s, %s, %s, %s, %s)"
@@ -531,18 +625,18 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                             cnx.commit()
                             cursor.close()
                             cnx.close()
-                            await interaction.response.send_message(f"The tag **{tag_name}** has been added to **{channel}**. I hope you enjoy the art it brings!")
+                            await interaction.response.send_message(f"The tag **{tag_name}** has been added to **{channel}**. I hope you enjoy the art it brings!", ephemeral=True)
                         else:
-                            await interaction.response.send_message(f"The [link](<{link}>) does not appear to have a tag connected to it. Make sure to check if it is the correct link")
+                            await interaction.response.send_message(f"The [link](<{link}>) does not appear to have a tag connected to it. Make sure to check if it is the correct link", ephemeral=True)
                     else:
                         cursor.close()
                         cnx.close()
                         tag = tags[tag_links.index(link_fnd[0])]
-                        await interaction.response.send_message(f"It would appear that **{tag[1]}** has already been added to **{channel}**")
+                        await interaction.response.send_message(f"It would appear that **{tag[1]}** has already been added to **{channel}**", ephemeral=True)
                 else:
-                    await interaction.response.send_message(f"Make sure the link you provided is the full url, spelt correctly, and from safebooru posts")
+                    await interaction.response.send_message(f"Make sure the link you provided is the full url, spelt correctly, and from safebooru posts", ephemeral=True)
         else:
-            await interaction.response.send_message(f"It would appear **{channel}** does not exist in our list of channels. Make sure to either set that channel as an art thread, check the spelling, or if the channel's name has not changed when it was set as an art thread")
+            await interaction.response.send_message(f"It would appear **{channel}** does not exist in our list of channels. Make sure to either set that channel as an art thread, check the spelling, or if the channel's name has not changed when it was set as an art thread", ephemeral=True)
 
 # @bot.tree.command(description="Dead code. Replaced by variant. Please dont use") # Unused
 # async def select_here(ctx):
@@ -795,12 +889,12 @@ async def see_tags_in_thread(interaction: discord.Interaction, channel: Optional
                 # print(all_tags)
                 # await interaction.response.send_message(f"{all_tags}")
             else:
-                await interaction.response.send_message(f"There were no tags found in **{channel}**")
+                await interaction.response.send_message(f"There were no tags found in **{channel}**", ephemeral=True)
         else:
             cursor.close()
             cnx.close()
             # if len(channel) > 0:
-            await interaction.response.send_message(f"It seems **{channel}** not on our list of channels. Make sure to check the spelling or the file to see if the name is different from what it is now")
+            await interaction.response.send_message(f"It seems **{channel}** not on our list of channels. Make sure to check the spelling or the file to see if the name is different from what it is now", ephemeral=True)
             # else:
             #     await interaction.response.send_message(f"Make sure when using this command to input the channel's name you are looking for. If you are trying to see the tags in the current channel, use the /seeTagsInHere command to see the tags in the current channel")
 
@@ -918,13 +1012,13 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
 
                     cursor.close()
                     cnx.close()
-                    await interaction.response.send_message(f"The tag **{dlt_name}** has been removed from **{channel_fnd[1]}**. Changes may take a moment to take affect")
+                    await interaction.response.send_message(f"The tag **{dlt_name}** has been removed from **{channel_fnd[1]}**. Changes may take a moment to take affect", ephemeral=True)
                     # else:
                     #     cursor.close()
                     #     cnx.close()
                     #     await interaction.response.send_message(f"Since you did not verify, **{dlt_fnd[1]}** will be kept")
                 else:
-                    await interaction.response.send_message(f"The tag under **{id_or_link}** does not exist in **{channel_fnd[1]}**. Make sure to check whether the tag is in another channel or if its the correct number associated")
+                    await interaction.response.send_message(f"The tag under **{id_or_link}** does not exist in **{channel_fnd[1]}**. Make sure to check whether the tag is in another channel or if its the correct number associated", ephemeral=True)
             else:
                 sql = f"SELECT ID, Name, Link FROM channel_{channel_fnd[0]}"
                 cursor.execute(sql)
@@ -953,17 +1047,17 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
 
                     cursor.close()
                     cnx.close()
-                    await interaction.response.send_message(f"The tag **{dlt_name}** has been removed from **{channel_fnd[1]}**. Changes may take a moment to take affect")
+                    await interaction.response.send_message(f"The tag **{dlt_name}** has been removed from **{channel_fnd[1]}**. Changes may take a moment to take affect", ephemeral=True)
                     # else:
                     #     cursor.close()
                     #     cnx.close()
                     #     await interaction.response.send_message(f"Since you did not verify, **{dlt_fnd[1]}** will be kept")
                 else:
-                    await interaction.response.send_message(f"The [link](<{id_or_link}>) provided does not exist in **{channel_fnd[1]}**. Make sure to check whether the link is in another channel or that the full url was used")
+                    await interaction.response.send_message(f"The [link](<{id_or_link}>) provided does not exist in **{channel_fnd[1]}**. Make sure to check whether the link is in another channel or that the full url was used", ephemeral=True)
         else:
             cursor.close()
             cnx.close()
-            await interaction.response.send_message(f"The channel **{channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now")
+            await interaction.response.send_message(f"The channel **{channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now", ephemeral=True)
 
 # @bot.tree.command(description="Dead code. Replaced by variant. Please dont use") # Unused
 # async def delete_tag_here(ctx):
@@ -1076,7 +1170,7 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
 #     allFloors.start()
 
 @bot.tree.command(description="Dont use. Unfinished and needs to be tested repeatedly. Will break")
-async def start_art_show(ctx):
+async def start_art_show(interaction: discord.Interaction):
     #global keep_going 
     #keep_going = True
 
@@ -1086,7 +1180,26 @@ async def start_art_show(ctx):
     user=user_2,
     password=password
     )
+    
+    #global keep_going 
+    #keep_going = False
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{interaction.guild_id};")
+        sql = f"UPDATE settings SET In_process = 1 WHERE ID = 1"
+        cursor.execute(sql)
+        cnx.commit()
 
+        cursor.close()
+    cnx.close()
+
+    await interaction.response.send_message("Starting the show", ephemeral=True)
+    await artShow(interaction.guild_id)
+
+    #artShow.start(interaction.guild_id)
+    #asyncio.create_task(artShow(interaction.guild_id))
+    
+    
     # while keep_going:
     #     documts = db.collection('character_threads')
     #     doc_ref = documts.stream()
@@ -1124,7 +1237,7 @@ async def start_art_show(ctx):
     #    await asyncio.sleep(1)
 
 @bot.tree.command(description="Dont use. Unfinished and needs to be tested repeatedly. Will break")
-async def stop_art_show(ctx):
+async def stop_art_show(interaction: discord.Interaction):
     cnx = mysql.connector.connect(
     host=host,
     user=user_2,
@@ -1135,7 +1248,7 @@ async def stop_art_show(ctx):
     #keep_going = False
     if cnx.is_connected():
         cursor = cnx.cursor()
-        cursor.execute(f"USE server_{ctx.guild.id};")
+        cursor.execute(f"USE server_{interaction.guild_id};")
         sql = f"UPDATE settings SET In_process = 0 WHERE ID = 1"
         cursor.execute(sql)
         cnx.commit()
@@ -1143,11 +1256,72 @@ async def stop_art_show(ctx):
         cursor.close()
     cnx.close()
 
-    await ctx.send("Ending the show")
+    await interaction.response.send_message("Ending the show", ephemeral=True)
 
-@tasks.loop(minutes=60)
-async def artShow(ctx):
-    await print("This is where the art grabbing will start")
+#@tasks.loop(seconds=5)
+async def artShow(guild):
+    
+    await bot.fetch_guild(guild)
+    # channels = bot.get_all_channels()
+    
+    # for channel in channels:
+    #     if channel.id == 1248806656209457172:
+    #         await bot.get_channel(1248806656209457172).send("test")
+    #     if channel.id == 1099140911616770181:
+    #         await bot.get_channel(1099140911616770181).send("test")
+
+    cnx = mysql.connector.connect(
+    host=host,
+    user=user_2,
+    password=password
+    )
+
+
+    #Latest art piece does not have id at the end. this could be if it is resized. Thumbnails still have id at end
+
+    if cnx.is_connected():
+        cursor = cnx.cursor()
+        cursor.execute(f"USE server_{guild};")
+        sql = f"SELECT Channel_ID FROM channels"
+        cursor.execute(sql)
+        dirty_threads = cursor.fetchall()
+        art_threads = [int(i[0]) for i in dirty_threads]
+
+        sql = f"SELECT In_process FROM settings"
+        cursor.execute(sql)
+        settings = cursor.fetchall()
+        process = [i[0] for i in settings][0]
+
+        while process == 1:
+            for channel in art_threads:
+                sql = f"SELECT ID, Link, Latest_art, Previous_art FROM channel_{channel}"
+                    # for x in range(20):
+                    #     await asyncio.sleep(1)
+                    #     await bot.get_channel(channel).send("Working")
+        
+        
+
+
+
+        cursor.close()
+        cnx.close()
+
+# @tasks.loop(seconds = 10)
+# async def hello(guild):
+#     await bot.fetch_guild(guild)
+#     channels = bot.get_all_channels()
+    
+#     for channel in channels:
+#         if channel.id == 1248806656209457172:
+#             await bot.get_channel(1248806656209457172).send("test")
+#         if channel.id == 1099140911616770181:
+#             await bot.get_channel(1099140911616770181).send("test")
+
+
+# @bot.tree.command(description="Dont use. Unfinished and needs to be tested repeatedly. Will break")
+# async def start(interaction: discord.Interaction):
+#     artShow.start(interaction.guild)
+#     await interaction.response.send_message("It begun")
 
 bot.run(safebooru_bot)
 
