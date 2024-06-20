@@ -473,7 +473,7 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                         tag_category = ' '.join([i for i in tag[25:-2] if i != None])
                         tag_type = tag[-2]
                         tag_link = tag[-1]
-                        clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "", "")
+                        clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
 
                         cursor.execute(f"USE server_{interaction.guild_id};")
                         sql = "INSERT INTO channel_" + channel_fnd[0] + " VALUES (%s, %s, %s, %s, %s, %s)"
@@ -520,7 +520,7 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
                             tag_category = ' '.join([i for i in tag[25:-2] if i != None])
                             tag_type = tag[-2]
                             tag_link = tag[-1]
-                            clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "", "")
+                            clean_tag = (tag_id, tag_name, tag_category, tag_type, tag_link, "")
 
                             cursor.execute(f"USE server_{interaction.guild_id};")
                             sql = "INSERT INTO channel_" + channel_fnd[0] + " VALUES (%s, %s, %s, %s, %s, %s)"
@@ -545,9 +545,13 @@ async def select(interaction: discord.Interaction, channel: Optional[str], id_or
         else:
             await interaction.response.send_message(f"It would appear **{channel}** does not exist in our list of channels. Make sure to either set that channel as an art thread, check the spelling, or if the channel's name has not changed when it was set as an art thread", ephemeral=True)
 
-@bot.tree.command(description="Unsure if I should add. Might change to step by step process. Lmk if you decide to message")
-async def how_to_search_and_select(ctx):
-    await ctx.send("")
+@bot.tree.command(description="Gives a step by step summary of the bot to make it work")
+async def what_to_do(interaction: discord.Interaction):
+    await interaction.response.send_message("1. First thing you want to do is /set_art_thread in a channel so that you can start adding tags to it\n" +
+                                            "2. If you do not have the full url of the tag you want to view, you can use /search to look for it and use the link or ID given to it\n" +
+                                            "3. With the tag found, use the url or ID with /select to add it to a channel that has been made into an art thread through /set_art_thread\n" +
+                                            "4. Once you have all the tags you want select, you can then /start_art_show which will initate the bot to send the images you seleceted\n" +
+                                            "5. When it is not searching or sending images, you can use /stop_art_show to stop it", ephemeral=True)
 
 @bot.tree.command(description="Shows the tags that have been added to an art thread")
 @app_commands.describe(channel = "Enter the name of the channel that you want to see. If left empty, the current channel will be selected")
@@ -712,7 +716,7 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
             cnx.close()
             await interaction.response.send_message(f"The channel **{channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now", ephemeral=True)
 
-@bot.tree.command(description="Starts art_show. Runs every 30 mins once started. During the runs, other commands are not available")
+@bot.tree.command(description="Starts art_show. Runs every 1 hr once started. During the runs, other commands are not available")
 async def start_art_show(interaction: discord.Interaction):
     # cnx = mysql.connector.connect(
     # host=host,
@@ -760,7 +764,7 @@ async def stop_art_show(interaction: discord.Interaction):
 #     art_shows.append(t)
 #     t.start(guild)
 
-@tasks.loop(seconds=600)
+@tasks.loop(seconds=3600)
 async def art_show(guild):
     await bot.fetch_guild(guild)
 
@@ -817,7 +821,7 @@ async def art_show(guild):
                     content = soup.find(class_="content")
                     if ("Search is overloaded" in content.text) | ("Nothing found" in content.text):
                         latest_art_id.append(latest_art[i])
-                        print("It is overloaded")
+                        # print("It is overloaded")
                     else:
                         if latest_art[i] == "":
                             art = content.select("span")[0]
@@ -844,7 +848,7 @@ async def art_show(guild):
                                 latest_art_id.append(art_ids[0])
                             else:
                                 latest_art_id.append(latest_art[i])
-                                print("It is the latest")
+                                # print("It is the latest")
                 except TimeoutException:
                     pass
             
@@ -853,7 +857,7 @@ async def art_show(guild):
 
             img_links_no_dup = list(set(img_links))
             for k in img_links_no_dup:
-                print(k)
+                # print(k)
                 try:
                     urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", ""), os.getcwd() + "/image.png")
                     await bot.get_channel(channel).send("", file=discord.File("image.png"))
@@ -870,8 +874,8 @@ async def art_show(guild):
                             await bot.get_channel(channel).send("", file=discord.File("image.png"))
 
             for x in range(len(tag_id)):
-                print(latest_art_id)
-                print(tag_id)
+                # print(latest_art_id)
+                # print(tag_id)
                 sql = f"UPDATE channel_{channel} SET Latest_art = '{latest_art_id[x]}' WHERE ID = {tag_id[x]}"
                 cursor.execute(sql)
 
