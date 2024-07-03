@@ -4,10 +4,7 @@ import asyncio
 from urllib.error import HTTPError
 import urllib.request
 from bs4 import BeautifulSoup
-import firebase_admin
 from selenium import webdriver
-from firebase_admin import credentials
-from firebase_admin import firestore_async
 from paginator import PaginatorView
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import TimeoutException
@@ -49,7 +46,6 @@ async def on_ready():
     #         print(guild.id)
     #         asyncio.create_task(artShow.start(guild.id))
 
-
 @bot.event
 async def on_guild_join(guild):
     cnx = mysql.connector.connect(
@@ -68,7 +64,6 @@ async def on_guild_join(guild):
         cursor.execute("Create TABLE settings(ID INT NOT NULL AUTO_INCREMENT, List_limit INT,  In_process TINYINT(1), PRIMARY KEY (ID));")
         row = [10, 0]
         cursor.execute("INSERT INTO settings (List_limit, In_process) VALUES (%s, %s)", row)
-        # Perhaps a row added in once the setting is finalized
         cursor.execute("DROP TABLE IF EXISTS channels;")
         cursor.execute("Create TABLE channels(Row_ID INT NOT NULL AUTO_INCREMENT, Channel_ID VARCHAR(32), Name VARCHAR(48), Amount_of_tags_selected INT, PRIMARY KEY (Row_ID));")
         cursor.close()
@@ -257,8 +252,6 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
         if len(name) > 0:
             col_value = 1
             for i in name:
-                # This line below would be too intensive for a database that I intend to be useable in multiple servers and pushed to cloud. Keeping it for future refrence on improvement
-                # search_name.append(f"LOWER({i}) in (Name_1, Name_2, Name_3, Name_4, Name_5, Name_6, Name_7, Name_8, Name_9, Name_10, Name_11, Name_12, Name_13, Name_14, Name_15, Name_16, Name_17, Name_18, Name_19, Name_20, Name_21, Name_22, Name_23, Name_24)")
                 j = i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")
                 srch.append(f"'{j}' LIKE Name_{col_value}")
                 slct.append(f"Name_{col_value}")
@@ -267,7 +260,7 @@ async def search(interaction: discord.Interaction, name: Optional[str], category
             col_value = 1
             for i in category:
                 j = i.replace('"', '\"').replace("'", "\'").replace("_", "\_").replace("%", "\%")
-                srch.append(f"Category_{col_value} LIKE '{j}' ")# (f"'{j}' LIKE Category_{col_value}")
+                srch.append(f"Category_{col_value} LIKE '{j}' ")
                 slct.append(f"Category_{col_value}")
                 col_value += 1
         if len(c_type) > 0:
@@ -667,12 +660,6 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
 
                 if id_or_link in tag_ids:
                     dlt_fnd = tags[tag_ids.index(id_or_link)]
-                    # def check(m):
-                    #     return m.author == ctx.author and m.channel == ctx.channel
-
-                    # await ctx.send(f"Are you sure you want to delete **{dlt_fnd[1]}** from **{channel[1]}**?")
-                    # response = await ctx.bot.wait_for('message', check=check)
-                    # if (response.content.lower() == 'yes') | (response.content.lower() == 'yeah') | (response.content.lower() == 'sure') | (response.content.lower() == 'y'):
                     dlt_name = dlt_fnd[1].replace("_", "\_").replace("%", "\%").replace('"', '\"').replace("'", "\'")
 
                     sql = f"DELETE FROM channel_{channel_fnd[0]} WHERE ID LIKE '{dlt_fnd[0]}'"
@@ -716,55 +703,17 @@ async def delete_tag_in_thread(interaction: discord.Interaction, channel: Option
             cnx.close()
             await interaction.response.send_message(f"The channel **{channel}** does not exist in our file. Make sure to check the spelling or check the file to see if the name is different from what it is now", ephemeral=True)
 
-@bot.tree.command(description="Starts art_show. Runs every 1 hr once started. During the runs, other commands are not available")
+@bot.tree.command(description="Starts art_show. Runs every 2 hr once started. During the runs, other commands are not available")
 async def start_art_show(interaction: discord.Interaction):
-    # cnx = mysql.connector.connect(
-    # host=host,
-    # user=user_2,
-    # password=password
-    # )
-
-    # if cnx.is_connected():
-    #     cursor = cnx.cursor()
-    #     cursor.execute(f"USE server_{interaction.guild_id};")
-    #     sql = f"UPDATE settings SET In_process = 1 WHERE ID = 1"
-    #     cursor.execute(sql)
-    #     cnx.commit()
-
-    #     cursor.close()
-    # cnx.close()
-
     await interaction.response.send_message("Starting the show", ephemeral=True)
     art_show.start(interaction.guild_id)
-    # task_generator(interaction.guild_id)
 
 @bot.tree.command(description="Stops the art_show loop but has to be done while the art_show is sleeping")
 async def stop_art_show(interaction: discord.Interaction):
-    # cnx = mysql.connector.connect(
-    # host=host,
-    # user=user_2,
-    # password=password
-    # )
-    
-    # if cnx.is_connected():
-    #     cursor = cnx.cursor()
-    #     cursor.execute(f"USE server_{interaction.guild_id};")
-    #     sql = f"UPDATE settings SET In_process = 0 WHERE ID = 1"
-    #     cursor.execute(sql)
-    #     cnx.commit()
-
-    #     cursor.close()
-    # cnx.close()
-
     art_show.cancel()
     await interaction.response.send_message("Ending the show", ephemeral=True)
 
-# def task_generator(guild):
-#     t = tasks.loop(seconds=30)(artShow)
-#     art_shows.append(t)
-#     t.start(guild)
-
-@tasks.loop(seconds=3600)
+@tasks.loop(seconds=7200)
 async def art_show(guild):
     await bot.fetch_guild(guild)
 
@@ -781,10 +730,6 @@ async def art_show(guild):
         cursor.execute(sql)
         dirty_threads = cursor.fetchall()
         art_threads = [int(i[0]) for i in dirty_threads]
-
-        # sql = f"SELECT In_process FROM settings"
-        # cursor.execute(sql)
-        # settings = cursor.fetchall()
         
         for channel in art_threads:
             sql = f"SELECT ID, Link, Latest_art FROM channel_{channel}"
@@ -806,11 +751,9 @@ async def art_show(guild):
             opt.add_argument("--headless=new")
             driver = webdriver.Chrome(options=opt)
 
-            #x = 0
             img_links = []
             latest_art_id = []
             for i in range(len(link)):
-                #for j in range(len(link[i])):
                 driver.get(f"{link[i]}")
                 wait = WebDriverWait(driver, 20)
 
@@ -821,7 +764,6 @@ async def art_show(guild):
                     content = soup.find(class_="content")
                     if ("Search is overloaded" in content.text) | ("Nothing found" in content.text):
                         latest_art_id.append(latest_art[i])
-                        # print("It is overloaded")
                     else:
                         if latest_art[i] == "":
                             art = content.select("span")[0]
@@ -829,7 +771,6 @@ async def art_show(guild):
                             latest_art_id.append(art.get("id"))
                             img_links.append(art_img["src"])
                         else:
-                            # s4786658
                             art = content.select("span")[0]
 
                             if latest_art[i] != art.get("id"):
@@ -848,7 +789,6 @@ async def art_show(guild):
                                 latest_art_id.append(art_ids[0])
                             else:
                                 latest_art_id.append(latest_art[i])
-                                # print("It is the latest")
                 except TimeoutException:
                     pass
             
@@ -857,7 +797,6 @@ async def art_show(guild):
 
             img_links_no_dup = list(set(img_links))
             for k in img_links_no_dup:
-                # print(k)
                 try:
                     urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", ""), os.getcwd() + "/image.png")
                     await bot.get_channel(channel).send("", file=discord.File("image.png"))
@@ -874,8 +813,6 @@ async def art_show(guild):
                             await bot.get_channel(channel).send("", file=discord.File("image.png"))
 
             for x in range(len(tag_id)):
-                # print(latest_art_id)
-                # print(tag_id)
                 sql = f"UPDATE channel_{channel} SET Latest_art = '{latest_art_id[x]}' WHERE ID = {tag_id[x]}"
                 cursor.execute(sql)
 
@@ -885,6 +822,11 @@ async def art_show(guild):
         cnx.close()
 
         
+@bot.event 
+async def on_message(ctx):
+    if ctx.author == bot.user:
+        return
+    
 # @artShow.before_loop
 # async def before():
 #         print('waiting...')

@@ -5,3 +5,7 @@ important.py
 bot_token.py
 __pycache__/bot_token.cpython-310.pyc
 __pycache__/paginator.cpython-310.pyc
+*.png
+*.jpg
+*.gif
+*.jpeg
