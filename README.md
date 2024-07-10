@@ -22,10 +22,10 @@ This step was repeated several times as the project went through as new implemen
 To minimize some of these issues, I separated the names into two parts. The first was the name which using the previous example would be “jun.” The second part was the category which would be any words within a parenthesis like “pokemon” and “cosplay.” A script was made that did this to the whole dataframe collected from the scrape. Once completed, a dataframe with columns of names from 1-24, categories from 1-4, type from the main_category, and the link was created.    
 
 ## Loading the data
-So before the data could be loaded, a database was first made called safebooru_info. This database will be separate from all the servers' databases. Then a table was created with safebooru_tags using the same column names as before along with a primary ID which will be used later. Once the table was created, the dataframe was loaded into there. This table will remain unchanged with each month having new records added. The bot will use only this table to grab from to add to the server’s databases.    
+So before the data could be loaded, a database was first made called safebooru_info. This database will be separate from all the servers' databases. Then a table was created with safebooru_tags using the same column names as before along with a primary ID which will be used later. Once the table was made, the dataframe was loaded into there. This table will remain unchanged with each month having new records added. The bot will use only this table to grab from to add to the server’s databases.    
 
 ## Creation of the Safebooru Bot
-A lot can be said in this part of the process but to more easily understand it, I will explain just how each part works and why it was implemented. The bot supports slash commands which allows the user to more easily view all the commands available and see what values they have to or do not have to put to use. The bot has 11 commands, 2 events, and 1 task that will be discussed.    
+A lot can be said in this part of the process but to more easily understand it, I will explain how each part works and why it was implemented. The bot supports slash commands, allowing the user to more easily view all the available commands and see what values they have to or do not have to put to use. The bot has 11 commands, 2 events, and 1 task that will be discussed.    
 
 **Event**
 * on_ready: This event begins when the bot is booted up and makes sure the commands are synced and correct.
@@ -49,6 +49,9 @@ A lot can be said in this part of the process but to more easily understand it, 
 
 ## Conclusion
 With the bot completed and functioning properly, the bot is ready to be used in servers. It has already been added to a server and is regularly being used by the users with satisfactory results. This does not however mean the bot is done as more features or improvements are intended to be made in the future. As it is now, it is a significant improvement to what it once was before.
+
+## Video Demo
+https://github.com/Cabone01/SafebooruBot/assets/89541481/41fb4d73-2bed-4c76-9c76-a09acd899f1f    
 
 ## Links
 [Safebooru Tags](https://safebooru.org/index.php?page=tags&s=list)
