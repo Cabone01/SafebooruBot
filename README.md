@@ -1,4 +1,4 @@
-# Safebooru
+# Safebooru Bot
 
 ## Introduction
 
