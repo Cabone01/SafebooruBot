@@ -713,7 +713,7 @@ async def stop_art_show(interaction: discord.Interaction):
     art_show.cancel()
     await interaction.response.send_message("Ending the show", ephemeral=True)
 
-@tasks.loop(seconds=7200)
+@tasks.loop(seconds=7200, reconnect=False)
 async def art_show(guild):
     await bot.fetch_guild(guild)
 
@@ -731,7 +731,9 @@ async def art_show(guild):
         dirty_threads = cursor.fetchall()
         art_threads = [int(i[0]) for i in dirty_threads]
         
+        #print(art_threads)
         for channel in art_threads:
+            #print(channel)
             sql = f"SELECT ID, Link, Latest_art FROM channel_{channel}"
             cursor.execute(sql)
             tags = cursor.fetchall()
@@ -796,8 +798,11 @@ async def art_show(guild):
             driver.quit()
 
             img_links_no_dup = list(set(img_links))
+            #print(img_links_no_dup)
             for k in img_links_no_dup:
+                print(k)
                 try:
+                    print(k.replace("thumbnails", "images").replace("thumbnail_", ""), os.getcwd() + "/image.png")
                     urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", ""), os.getcwd() + "/image.png")
                     await bot.get_channel(channel).send("", file=discord.File("image.png"))
                 except HTTPError:
@@ -809,17 +814,29 @@ async def art_show(guild):
                             urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", "").replace("jpg", "png"), os.getcwd() + "/image.png")
                             await bot.get_channel(channel).send("", file=discord.File("image.png"))
                         except HTTPError:
-                            urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", "").replace("jpeg", "png"), os.getcwd() + "/image.png")
-                            await bot.get_channel(channel).send("", file=discord.File("image.png"))
-
+                            try:
+                                urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", "").replace("jpeg", "png"), os.getcwd() + "/image.png")
+                                await bot.get_channel(channel).send("", file=discord.File("image.png"))
+                            except HTTPError:
+                                try:
+                                    urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", "").replace("jpg", "gif"), os.getcwd() + "/image.gif")
+                                    await bot.get_channel(channel).send("", file=discord.File("image.gif"))
+                                except HTTPError:
+                                    urllib.request.urlretrieve(k.replace("thumbnails", "images").replace("thumbnail_", "").replace("jpeg", "gif"), os.getcwd() + "/image.gif")
+                                    await bot.get_channel(channel).send("", file=discord.File("image.gif"))
+            #print(tag_id)
+            #print(latest_art_id)
             for x in range(len(tag_id)):
                 sql = f"UPDATE channel_{channel} SET Latest_art = '{latest_art_id[x]}' WHERE ID = {tag_id[x]}"
                 cursor.execute(sql)
-
+                #print(None)
+            
             cnx.commit()
+            #print("commit")
             
         cursor.close()
         cnx.close()
+        #print("close")
 
         
 @bot.event 
